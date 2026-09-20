@@ -18,22 +18,40 @@ Turn the full "AI generation → pixelization → polish → game assets" flow i
 4. **Quality over quantity**: every feature ships at "pixel-grade" completion — no half-finished pile-ups.
 5. **Sustainable maintenance**: tests, CI, i18n, and docs evolve together with features.
 
-## 3. Current State (v1.0.0)
+## 3. Current State (v1.1.0)
 
 | Module | Status |
 |--------|--------|
 | Solo one-click pipeline (text→image→video→pixelize→key→export) | ✅ Working (reference i2i, loop closing, background stability, multi-provider adapters, size auto-fallback) |
-| IDE step workspace (6 steps, timeline, per-step params panel) | ✅ Working |
-| Pixel editor (shapes/symmetry/wrap/transforms + selection/layers, color families, color wheel, import/export) | ✅ Working (v1.0 tools below) |
+| IDE step workspace (6 steps, timeline, per-step params panel) | ✅ Working (v1.1: top step bar + three columns, first-frame/frame-sequence connected) |
+| Pixel editor (shapes/symmetry/wrap/transforms + selection/layers, color families, color wheel, import/export) | ✅ Working |
 | Sprite workflow (grid sheet → crop → key → export, IDE sync) | ✅ Working |
-| Standalone pixel board (resolution settings, two-way sync, video first-frame) | ✅ Working (Krita-style three-column docks + in-pack folder browsing) |
-| **Tilemap mode (5th mode, v0.2–v0.3 main line)** | ✅ Working (see below) |
-| **Krita-style shell (menu bar / contextual toolbar / docker panels / resizable splitters / stacked fill)** | ✅ Working (all 5 modes, v1.0 main line) |
+| Standalone pixel board (resolution settings, two-way sync, video first-frame) | ✅ Working (v1.1: draggable dock sections, one-row filter, slimmer right panel) |
+| **Relay (aggregator) API setup — auth / endpoint probing / field paths / cURL import / one-click adapt** | ✅ Working (v1.1 main line, see below) |
+| **Tilemap mode (5th mode, v0.2–v0.3 main line)** | ✅ Working |
+| **Krita-style shell (menu bar / contextual toolbar / docker panels / resizable splitters / stacked fill)** | ✅ Working (all 5 modes) |
 | zh/en i18n + UI scaling + DSH-style icons | ✅ Working (no residue in either direction) |
-| CI (GitHub Actions, Py3.11/3.13 × Win/Linux), **600** tests | ✅ Running |
-| Windows packaging (PyInstaller onedir) + GitHub Release | ✅ v1.0.0 |
+| CI (GitHub Actions, Py3.11/3.13 × Win/Linux), **700** tests | ✅ Running |
+| Windows packaging (PyInstaller onedir) + GitHub Release | ✅ v1.1.0 |
 
-### What's new in v1.0.0
+### What's new in v1.1.0
+
+- **One-click relay endpoint adapt**: `core/api/endpoint_probe.py` probes the common video submit endpoints
+  (harmless GETs only by default), normalises pasted Base URLs (a full endpoint URL is split correctly), and
+  a result table writes the submit/poll URLs and provider adapter back in one click. Plus six auth styles,
+  15 template placeholders, configurable submit method and poll body, field-path fallbacks, and
+  *Preview request / Test & detect fields / Import from cURL*. See `docs/api_setup.md`.
+- **IDE mode rebuilt**: top step bar (✓ done / ▶ current / ○ pending, click to switch) + three columns
+  (assets | preview·edit·prompts with the timeline underneath | params + log); parameters expanded by
+  default. **Two blocking bugs fixed**: images could not be added to the frame sequence, and
+  first-frame → video got stuck.
+- **Standalone canvas layout**: the dividers inside the asset dock (pack list / folder tree / thumbnails)
+  are draggable and the hard height caps are gone; category dropdown and search share one row; the right
+  dock went from three panels to two.
+- **Quality**: ~70 new English strings and three real i18n defects fixed; tests 600 → 700; CI green on all
+  four platform/Python combinations.
+
+### What's new in v1.0.0 (previous)
 
 - **Krita-inspired shell**: menu bar + contextual toolbar + mode rail + status bar; one unified docker
   system (collapsible headers, whole-dock collapse into a vertical tab, drag-resizable and remembered
@@ -346,7 +364,7 @@ production without switching to IDE mode.
 | **M3** | Tiled `.tmx/.tsx` import/export, map layer stack + rectangle/fill tools, A3 polish round-trip, A4 viewport/async export | Next release |
 | **M4** | B1 result caching/parallelism + B2 multi-candidate & prompt templates + C2 inline sprite editing | After M3 |
 | **M5 (v1.0)** | Stabilization, 100 % i18n, D1 auto-update, community, **v1.0** | ✅ Released (2026-09-18) |
-| **M6 (v1.1)** | **I canvas productivity** (layer stack / selection / stamps & patterns / macros / command palette) + **F extraction refinement** (stability, loops, colour consistency, metrics panel) | Planned (near term) |
+| **M6 (v1.1)** | Relay API one-click adapt (auth / endpoint probing / field paths / cURL import) + IDE and canvas layout rebuild + first-frame/frame-sequence fix; **I canvas productivity** (layer stack / selection / stamps / macros / command palette) and **F extraction refinement** still pending | 🚧 Partially shipped (v1.1.0, 2026-09-20) |
 | **M7 (v1.2)** | **E strict isometric (rhombus) tilemaps**: geometry & mask layer, ramps/stairs families, isometric preview & editor, isometric export (Tiled/Godot) | Planned |
 | **M8 (v1.3)** | **G skeleton + vector sequence frames**: rig editor, pixel-faithful deformation, preset motion library & baking, complementary to AI extraction | Planned |
 | **M9 (v2.0)** | **H style plugins (LoRA-like)**: plugin format & layered effect, combination weights, management UI, cross-pipeline consistency, plus D1–D5 polish | Planned (major) |
@@ -388,6 +406,5 @@ production without switching to IDE mode.
 
 ---
 
-*Last updated: 2026-09-18 (alongside v1.0.0: Krita-style shell, new pixel-editor tools, in-pack folder browsing,
-i18n and code cleanup; plus new Phases E–I: isometric rhombus tilemaps, image-to-video extraction refinement,
-skeleton + vector sequence frames, style plugins, canvas productivity)*
+*Last updated: 2026-09-20 (alongside v1.1.0: one-click relay API adapt, IDE three-column rebuild with
+first-frame/frame-sequence fix, standalone canvas layout polish; Phases E–I unchanged, M6 marked partially shipped)*
