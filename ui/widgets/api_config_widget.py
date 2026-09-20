@@ -2,9 +2,16 @@
 
 每种 API 类型的字段由 config.api_config.FIELD_DEFS 定义，
 控件按字段类型自动生成表单控件（文本/密码/整数/浮点/布尔）。
+
+针对中转站/聚合站（relay）的辅助入口（不依赖网络即可构建界面）：
+- 视频：「预览请求…」「测试并检测字段…」——先看将发出的请求，再真发一次提交请求，
+  把响应里猜出的任务ID/状态/视频URL 字段路径一键写回表单；
+- 三类 API：「从 curl 导入…」——粘贴浏览器 F12 里 Copy as cURL 的命令，
+  自动填好 Base URL / 提交端点 / 请求方法 / 额外请求头 / 请求体模板。
 """
 from __future__ import annotations
 
+import io
 import logging
 from typing import Dict, Optional
 
@@ -31,11 +38,15 @@ from PySide6.QtWidgets import (
 
 from config.api_config import APIConfig, FIELD_DEFS, PROVIDER_PRESETS
 from config.settings import API_KIND_LABELS
+from core.api.curl_import import parse_curl, to_params
 from core.api.factory import is_mock_config
 from ui.i18n import T, tr
 from ui.workers import FunctionWorker
 
 logger = logging.getLogger("PixelFoundry.ui.api_config_widget")
+
+# 「测试并检测字段」时用的合成首帧尺寸（API 最低要求通常是 256 长边）
+_TEST_FRAME_SIDE = 256
 
 
 class ModelPickerDialog(QDialog):
@@ -93,6 +104,44 @@ class ModelPickerDialog(QDialog):
             self.accept()
 
 
+class CurlImportDialog(QDialog):
+    """粘贴 cURL 命令 → 解析出端点/方法/请求头/请求体模板。
+
+    只负责收集文本，解析交给 core.api.curl_import.parse_curl（纯函数，便于测试）。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("从 curl 导入"))
+        self.setMinimumSize(640, 420)
+        layout = QVBoxLayout(self)
+        hint = T(
+            QLabel(),
+            "在浏览器开发者工具（F12 → 网络）里右键任意请求 → 复制 → 以 cURL 格式复制，"
+            "粘贴到下面即可自动填好 Base URL / 提交端点 / 请求方法 / 额外请求头 / 请求体模板。",
+        )
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        self._text = QPlainTextEdit()
+        self._text.setPlaceholderText(
+            tr("curl 'https://relay.example.com/v1/videos/generations' -H 'x-api-key: sk-…' --data-raw '{…}'")
+        )
+        layout.addWidget(self._text, 1)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("解析并填入"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def text(self) -> str:
+        return self._text.toPlainText()
+
+    def set_text(self, text: str) -> None:
+        self._text.setPlainText(text)
+
+
 class ApiConfigWidget(QWidget):
     """管理一种 API 类型（llm/image/video）的多套配置。"""
 
@@ -131,6 +180,29 @@ class ApiConfigWidget(QWidget):
         self._preset_combo.currentIndexChanged.connect(self._on_preset_selected)
         preset_row.addWidget(self._preset_combo, 1)
         root.addLayout(preset_row)
+
+        # 中转站辅助：预览请求 / 测试并检测字段 / 从 curl 导入（不联网即可构建）
+        tools_row = QHBoxLayout()
+        tools_row.addWidget(T(QLabel(), "中转站辅助"))
+        self._btn_preview = T(QPushButton(), "预览请求…")
+        self._btn_preview.setToolTip(tr("只组装不发送：查看将发出的方法/URL/请求头/请求体（Key 已打码）"))
+        self._btn_preview.clicked.connect(self._on_preview_request)
+        tools_row.addWidget(self._btn_preview)
+        self._btn_probe = T(QPushButton(), "测试并检测字段…")
+        self._btn_probe.setToolTip(tr("真发一次提交请求（不轮询），并自动识别任务ID/状态/视频URL 的字段路径"))
+        self._btn_probe.clicked.connect(self._on_probe_request)
+        tools_row.addWidget(self._btn_probe)
+        self._btn_curl = T(QPushButton(), "从 curl 导入…")
+        self._btn_curl.setToolTip(tr("粘贴浏览器「Copy as cURL」的命令，自动填端点、请求头与请求体模板"))
+        self._btn_curl.clicked.connect(self._on_import_curl)
+        tools_row.addWidget(self._btn_curl)
+        tools_row.addStretch(1)
+        self._relay_buttons = [self._btn_preview, self._btn_probe, self._btn_curl]
+        if self.kind != "video":
+            # 预览/探测目前只对「提交+轮询」型视频接口有意义
+            self._btn_preview.hide()
+            self._btn_probe.hide()
+        root.addLayout(tools_row)
 
         row = QHBoxLayout()
         self._combo = QComboBox()
@@ -455,6 +527,175 @@ class ApiConfigWidget(QWidget):
             self._test_result.setText(tr("已选择模型: {0}").format(dialog.selected))
 
     # ------------------------------------------------------------------ #
+    # 中转站辅助：预览请求 / 测试并检测字段 / 从 curl 导入
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _test_frame_png(side: int = _TEST_FRAME_SIDE) -> bytes:
+        """合成一张测试首帧 PNG（灰底 + 彩色方块/斜线，便于肉眼确认结果）。
+
+        真正的 3D 渲染没必要：探测只关心服务端是否接受这张图。
+        """
+        from PIL import Image, ImageDraw
+
+        image = Image.new("RGB", (side, side), (48, 52, 64))
+        draw = ImageDraw.Draw(image)
+        margin = max(4, side // 8)
+        draw.rectangle(
+            [margin, margin, side - margin, side - margin],
+            outline=(220, 226, 236),
+            width=max(1, side // 64),
+        )
+        third = side // 3
+        draw.rectangle([third, third, third * 2, third * 2], fill=(226, 88, 74))
+        draw.line([0, side - 1, side - 1, 0], fill=(120, 190, 255), width=max(1, side // 64))
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def _make_client_or_warn(self, need_base_url: bool = True):
+        """按当前表单构建客户端；条件不满足时提示并返回 None。"""
+        cfg = self._collect_config()
+        if need_base_url and not cfg.base_url:
+            QMessageBox.warning(self, tr("提示"), tr("请先填写 Base URL"))
+            return None
+        if is_mock_config(cfg):
+            QMessageBox.information(self, tr("提示"), tr("模拟 API 无需预览/探测请求"))
+            return None
+        from core.api.factory import create_api_client
+
+        return create_api_client(self.kind, cfg)
+
+    def _build_preview_frame(self, client):
+        """组装请求预览 + 合成测试帧，返回 (preview, frame)。"""
+        frame = self._test_frame_png()
+        preview = client.preview_request(frame, tr("a small red cube rotating"), frames=8, fps=8)
+        return preview, frame
+
+    def _on_preview_request(self) -> None:
+        """「预览请求…」：只组装不发送，把请求原样展示出来（Key 已打码）。"""
+        client = self._make_client_or_warn()
+        if client is None:
+            return
+        try:
+            preview, _frame = self._build_preview_frame(client)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("组装请求预览失败")
+            QMessageBox.critical(
+                self, tr("预览失败"), tr("无法组装请求: {0}").format(exc)
+            )
+            client.close()
+            return
+        self._open_probe_dialog(client, preview, probe=False)
+
+    def _on_probe_request(self) -> None:
+        """「测试并检测字段…」：真发一次提交请求，并允许一键采用检测到的字段路径。"""
+        client = self._make_client_or_warn()
+        if client is None:
+            return
+        if not self._get_field("api_key") and not self._extra_headers_present():
+            answer = QMessageBox.question(
+                self,
+                tr("提示"),
+                tr("还没有填写 API Key，测试请求很可能返回 401/403。仍要继续吗？"),
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                client.close()
+                return
+        try:
+            preview, frame = self._build_preview_frame(client)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("组装请求预览失败")
+            QMessageBox.critical(self, tr("预览失败"), tr("无法组装请求: {0}").format(exc))
+            client.close()
+            return
+        dialog = self._open_probe_dialog(client, preview, probe=True, frame=frame)
+        if dialog is not None and dialog.result() == QDialog.DialogCode.Accepted:
+            client.close()
+
+    def _extra_headers_present(self) -> bool:
+        """额外请求头里是否写了内容（有些站点把 Key 放在额外请求头里）。"""
+        return bool(str(self._get_field("extra_headers") or "").strip())
+
+    def _open_probe_dialog(self, client, preview: dict, probe: bool, frame: Optional[bytes] = None):
+        """打开探测对话框；probe=True 时接线「使用」→ 写回表单字段。"""
+        from ui.dialogs.api_probe_dialog import ApiProbeDialog
+
+        def run_probe():
+            return client.probe(frame or self._test_frame_png(), tr("a small red cube rotating"), frames=8, fps=8)
+
+        dialog = ApiProbeDialog(
+            self.kind,
+            preview,
+            run_probe if probe else (lambda: None),
+            parent=self,
+            on_apply=lambda field, path: self._apply_detected_field(client, field, path),
+        )
+        dialog.exec()
+        return dialog
+
+    def _apply_detected_field(self, client, field: str, path: str) -> None:
+        """把检测到的字段路径写回对应表单字段，并同步到客户端以便继续预览。"""
+        widget = self._fields.get(field)
+        if widget is None:
+            QMessageBox.information(self, tr("提示"), tr("当前 API 类型没有「{0}」字段").format(field))
+            return
+        if isinstance(widget, QPlainTextEdit):
+            widget.setPlainText(path)
+        elif isinstance(widget, QLineEdit):
+            widget.setText(path)
+        else:  # 其它控件类型（理论上不会走到）
+            self._set_field(field, path)
+        params = dict(getattr(client, "params", {}) or {})
+        params[field] = path
+        client.params = params
+        self._test_result.setStyleSheet("color: #22c55e;")
+        self._test_result.setText(tr("已写入「{0}」= {1}（点「保存配置」后生效）").format(field, path))
+
+    def _on_import_curl(self) -> None:
+        """「从 curl 导入…」：解析 cURL 命令并填入端点/请求头/请求体模板。"""
+        dialog = CurlImportDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        text = dialog.text().strip()
+        if not text:
+            QMessageBox.warning(self, tr("提示"), tr("请先粘贴 curl 命令"))
+            return
+        try:
+            imported = parse_curl(text)
+            params = to_params(imported)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("解析 curl 失败")
+            QMessageBox.critical(self, tr("导入失败"), tr("无法解析 curl 命令: {0}").format(exc))
+            return
+        self._fill_from_curl(imported, params)
+        warnings = list(imported.warnings)
+        summary = tr("已从 curl 填入：{0}").format(
+            tr("{0} 个字段").format(len([p for p in params if p in self._fields]))
+        )
+        QMessageBox.information(
+            self,
+            tr("从 curl 导入"),
+            summary + ("\n\n" + tr("注意事项：") + "\n- " + "\n- ".join(warnings) if warnings else ""),
+        )
+        self._test_result.setStyleSheet("")
+        self._test_result.setText(summary + tr("；请核对端点与鉴权后点「保存配置」"))
+
+    def _fill_from_curl(self, imported, params: dict) -> None:
+        """把解析结果写进表单（只写存在的字段）。"""
+        if imported.base_url:
+            self._set_field("base_url", imported.base_url)
+        for key, value in params.items():
+            if key in self._fields:
+                self._set_field(key, value)
+        logger.info(
+            "curl 导入：method=%s url=%s headers=%d placeholders=%d",
+            imported.method,
+            imported.url,
+            len(imported.headers or {}),
+            len(imported.placeholders or {}),
+        )
+
+    # ------------------------------------------------------------------ #
     # 表单字段辅助
     # ------------------------------------------------------------------ #
     def _default_for(self, key: str):
@@ -511,6 +752,8 @@ class ApiConfigWidget(QWidget):
         self._btn_test.setEnabled(enabled)
         self._btn_models.setEnabled(enabled)
         self._btn_delete.setEnabled(enabled)
+        for button in getattr(self, "_relay_buttons", []):
+            button.setEnabled(enabled)
 
 
 class APIResultShim:

@@ -22,6 +22,31 @@ _LANG: str = "zh"  # 当前语言（LANG_PACKS 的 key）
 LANG_PACKS: dict = {
     "zh": {},
     "en": {
+        # ---------- IDE 分步工作区：步骤条 / 首帧图 / 帧操作 ----------
+        "执行当前步骤（与右侧参数栏底部按钮相同）": "Run the current step (same as the button at the bottom of the parameter dock)",
+        "清空工作区，从头开始": "Clear the workspace and start over",
+        "打开已保存的 IDE 项目（帧序列 + 首帧图）": "Open a saved IDE project (frame sequence + first frame)",
+        "保存项目：帧序列 PNG + 首帧图 + 参数": "Save the project: frame PNGs + first frame + parameters",
+        "将作为首帧送入视频 API 的图片": "Image that will be sent to the video API as the first frame",
+        "首帧图：未设置（生成首帧图片，或用当前帧作为首帧）": "First frame: not set (generate a first frame, or use the current frame)",
+        "用当前帧作为首帧": "Use current frame as first frame",
+        "把时间轴当前选中的帧设为动画生成的首帧图": "Set the frame selected in the timeline as the first frame for animation generation",
+        "清空日志": "Clear log",
+        "动画生成用左栏「首帧图」那张图送入视频 API；没设首帧时会自动用帧序列第 1 帧": "Animation generation sends the image under “First frame” in the left dock to the video API; when no first frame is set, frame 1 of the sequence is used automatically",
+        "暂无图片可添加（先生成首帧图片 / 导入图片 / 添加空白帧）": "Nothing to add yet (generate a first frame, import an image, or add a blank frame)",
+        "正在编辑首帧图（改完点「+ 当前图」即可加入帧序列，或直接走「动画生成」）": "Editing the first frame (click “+ Current image” to add it to the sequence, or run Animation generation directly)",
+        "仅有参考图": "Reference image only",
+        "下一步：{0}": "Next: {0}",
+        "已把{0}添加为第 {1} 帧": "Added the {0} as frame {1}",
+        "已把第 {0} 帧设为动画生成的首帧图": "Frame {0} is now the first frame for animation generation",
+        "首帧图：{0}×{1}（动画生成将用它）": "First frame: {0}×{1} (used by animation generation)",
+        "首帧图 {w}×{h}": "First frame {w}×{h}",
+        "当前帧": "current frame",
+        "+ 当前图": "+ Current image",
+        "把首帧图 / 当前选中帧追加到帧列表末尾": "Append the first frame / the selected frame to the end of the frame list",
+        "未单独设置首帧图，改用帧序列第 1 帧作为首帧": "No separate first frame was set; using frame 1 of the sequence",
+        "缺少首帧图片：请先执行「{0}」，或在「资源」栏添加参考图，或在时间轴用「+ 当前图」添加一帧后点「用当前帧作为首帧」": "Missing a first-frame image: run “{0}”, or add a reference image in the Assets dock, or add a frame with “+ Current image” and click “Use current frame as first frame”",
+        "资源": "Assets",
         # ---------- Krita 风格外壳：菜单栏 / 工具条 / 停靠面板 ----------
         "主工具条": "Main toolbar",
         "文件": "File",
@@ -729,6 +754,113 @@ LANG_PACKS: dict = {
     "成功状态(逗号分隔)": "Success statuses (comma)",
     "失败状态(逗号分隔)": "Failure statuses (comma)",
     "视频URL字段路径": "Video URL path",
+    "帧序列字段路径(可选)": "Frame-sequence path (optional)",
+    "服务商直接返回帧序列时填；默认 output.frames（数组内取 b64_json/base64）":
+        "Fill in when the provider returns frames directly; default output.frames (reads b64_json/base64 inside the array)",
+    "提交方法": "Submit method",
+    "POST（JSON 请求体）": "POST (JSON body)",
+    "PUT（JSON 请求体）": "PUT (JSON body)",
+    "GET（模板摊平成查询参数）": "GET (template flattened into query params)",
+    "个别中转站用 PUT / GET 提交": "Some relays submit with PUT / GET",
+    "首帧图片URL(可选)": "First-frame image URL (optional)",
+    "自备图床的公网图片地址；填写后可用 $image_url 代替 base64 上传":
+        "Public image URL you host yourself; once set you can use $image_url instead of uploading base64",
+    "如 模糊, 变形, 多余肢体（模板里用 $negative_prompt 引用）":
+        "e.g. blurry, deformed, extra limbs (reference it as $negative_prompt in the template)",
+    "随机种子(-1 随机)": "Seed (-1 = random)",
+    "视频画面比例": "Video aspect ratio",
+    "如 16:9 / 1:1（模板里用 $ratio 引用）": "e.g. 16:9 / 1:1 (reference it as $ratio in the template)",
+    "分辨率": "Resolution",
+    "如 720p / 1080p（模板里用 $resolution 引用）": "e.g. 720p / 1080p (reference it as $resolution in the template)",
+    "生成模式": "Generation mode",
+    "如 std / pro（模板里用 $mode 引用）": "e.g. std / pro (reference it as $mode in the template)",
+    "轮询请求体模板(JSON, 可选)": "Poll request-body template (JSON, optional)",
+    '如 {"task_id": "$task_id", "action": "query"}；轮询方法为 POST/PUT 时发送，支持 $task_id 及提交模板的全部占位符':
+        'e.g. {"task_id": "$task_id", "action": "query"}; sent when the poll method is POST/PUT and supports $task_id plus every submit-template placeholder',
+    "自定义请求方法": "Custom request method",
+    "「完全自定义」时的通用请求方法（视频提交以「提交方法」为准）":
+        "Generic request method in fully-custom mode (video submits follow the Submit method)",
+    '如 {"model_name":"$model","image":"$image"}；支持 $model/$prompt/$negative_prompt/$image/$image_raw/$image_url/$last_image/$frames/$fps/$duration/$seed/$ratio/$resolution/$mode':
+        'e.g. {"model_name":"$model","image":"$image"}; supports $model/$prompt/$negative_prompt/$image/$image_raw/$image_url/$last_image/$frames/$fps/$duration/$seed/$ratio/$resolution/$mode',
+    # ---------- API 配置：鉴权方式（中转站适配） ----------
+    "鉴权方式": "Authentication",
+    "多数服务商用 Bearer；中转站常用 X-API-Key / api-key / 查询参数":
+        "Most providers use Bearer; relays usually want X-API-Key / api-key / a query parameter",
+    "Bearer 令牌（Authorization: Bearer <Key>，默认）": "Bearer token (Authorization: Bearer <Key>, default)",
+    "X-API-Key 请求头（中转站常用）": "X-API-Key header (common for relays)",
+    "api-key 请求头（部分中转站）": "api-key header (some relays)",
+    "URL 查询参数（?key=<Key>）": "URL query parameter (?key=<Key>)",
+    "自定义请求头（下填头名/前缀）": "Custom header (fill in name/prefix below)",
+    "不鉴权（本地/内网服务）": "No auth (local / intranet service)",
+    "自定义鉴权头名": "Custom auth header name",
+    "如 X-Token / api-key（仅「自定义请求头」时生效）":
+        "e.g. X-Token / api-key (only used by Custom header)",
+    "自定义鉴权前缀": "Custom auth prefix",
+    '如 "Bearer "（含空格）或 "Token "；留空则直接填 Key':
+        'e.g. "Bearer " (with the space) or "Token "; leave empty to send the key alone',
+    "查询参数名": "Query parameter name",
+    "如 key / api_key / api-key（仅「URL 查询参数」时生效）":
+        "e.g. key / api_key / api-key (only used by URL query parameter)",
+    # ---------- 中转站辅助入口（配置控件） ----------
+    "中转站辅助": "Relay helpers",
+    "预览请求…": "Preview request…",
+    "只组装不发送：查看将发出的方法/URL/请求头/请求体（Key 已打码）":
+        "Build only, never send: inspect the method / URL / headers / body about to be sent (key redacted)",
+    "测试并检测字段…": "Test & detect fields…",
+    "真发一次提交请求（不轮询），并自动识别任务ID/状态/视频URL 的字段路径":
+        "Sends one real submit request (no polling) and auto-detects the job-ID / status / video-URL field paths",
+    "从 curl 导入…": "Import from curl…",
+    "粘贴浏览器「Copy as cURL」的命令，自动填端点、请求头与请求体模板":
+        "Paste a browser \"Copy as cURL\" command to fill endpoints, headers and the body template",
+    "从 curl 导入": "Import from curl",
+    "解析并填入": "Parse & fill in",
+    "在浏览器开发者工具（F12 → 网络）里右键任意请求 → 复制 → 以 cURL 格式复制，粘贴到下面即可自动填好 Base URL / 提交端点 / 请求方法 / 额外请求头 / 请求体模板。":
+        "In the browser dev tools (F12 → Network) right-click any request → Copy → Copy as cURL, then paste it below: Base URL / submit endpoint / request method / extra headers / body template are filled in automatically.",
+    "模拟 API 无需预览/探测请求": "Mock APIs need no request preview/probe",
+    "还没有填写 API Key，测试请求很可能返回 401/403。仍要继续吗？":
+        "No API Key yet — the test request will most likely return 401/403. Continue anyway?",
+    "请先粘贴 curl 命令": "Paste a curl command first",
+    "已从 curl 填入：{0}": "Filled in from curl: {0}",
+    "{0} 个字段": "{0} fields",
+    "；请核对端点与鉴权后点「保存配置」":
+        "; check the endpoint and authentication, then click Save config",
+    "注意事项：": "Notes:",
+    "预览失败": "Preview failed",
+    "无法组装请求: {0}": "Cannot build the request: {0}",
+    "无法解析 curl 命令: {0}": "Cannot parse the curl command: {0}",
+    "已写入「{0}」= {1}（点「保存配置」后生效）":
+        "Wrote \"{0}\" = {1} (takes effect after Save config)",
+    "当前 API 类型没有「{0}」字段": "This API type has no \"{0}\" field",
+    "curl 'https://relay.example.com/v1/videos/generations' -H 'x-api-key: sk-…' --data-raw '{…}'":
+        "curl 'https://relay.example.com/v1/videos/generations' -H 'x-api-key: sk-…' --data-raw '{…}'",
+    # ---------- 接口探测对话框 ----------
+    "接口探测 — 预览请求 / 测试并检测字段": "API probe — preview request / test & detect fields",
+    "将发送的请求（API Key 已打码，可复制）": "Request to be sent (API key redacted, copyable)",
+    "请求头:": "Headers:",
+    "请求体:": "Body:",
+    "复制请求": "Copy request",
+    "发送测试请求": "Send test request",
+    "只发一次提交请求、不轮询；失败也会把原始响应显示出来":
+        "One submit request only, no polling; the raw response is shown even on failure",
+    "正在发送测试请求…": "Sending the test request…",
+    "已复制请求到剪贴板": "Request copied to the clipboard",
+    "检测到的字段（点「使用」写入设置表单）": "Detected fields (click Use to write them into the form)",
+    "点「发送测试请求」后在此列出可用的字段路径":
+        "Click Send test request to list the available field paths here",
+    "未检测到可用字段：可展开原始响应手动填写路径":
+        "No usable fields detected: expand the raw response and fill in the path manually",
+    "共检测到 {0} 条候选路径；点「使用」即写入对应的「{1}」字段":
+        "{0} candidate paths detected; click Use to write one into its {1} field",
+    "字段路径": "field path",
+    "使用": "Use",
+    "HTTP 状态码: {0}": "HTTP status: {0}",
+    "✓ 请求成功（HTTP {0}），已尝试识别字段路径":
+        "✓ Request succeeded (HTTP {0}); field paths were analysed",
+    "✗ 请求失败: {0}": "✗ Request failed: {0}",
+    "已写入：{0} = {1}（点「保存配置」后生效）":
+        "Wrote {0} = {1} (takes effect after Save config)",
+    "（响应体为空）": "(empty response body)",
+    "（当前响应里取不到该路径）": "(no value at this path in the response)",
     "额外字段(JSON, 可选)": "Extra fields (JSON, optional)",
     "输入关键词过滤（如 seedance / kling / image）…": "Filter by keyword (seedance / kling / image)…",
     "（自定义）": "(custom)",
@@ -960,6 +1092,12 @@ LANG_PACKS: dict = {
     "敲击": "Knock",
     "庆祝": "Celebrate",
     # ---------- 完全自定义 API ----------
+    # 中转站预设名（设置页「服务商预设」下拉）
+    "中转站：OpenAI 兼容生图": "Relay: OpenAI-compatible image",
+    "中转站：OpenAI 风格 /v1/videos": "Relay: OpenAI-style /v1/videos",
+    "中转站：提交+轮询（通用模板）": "Relay: submit + poll (generic template)",
+    "快手可灵 Kling（直连需 JWT，经中转用 Bearer Key）":
+        "Kuaishou Kling (vendor-direct needs JWT; via a relay use a Bearer key)",
     "完全自定义请求（用下方模板覆盖默认请求体）": "Fully custom request (template below overrides the default body)",
     "完全自定义（全部手填：端点/模板/字段路径）": "Custom (all manual: endpoints / template / field paths)",
     "请求方法": "Request method",

@@ -54,6 +54,7 @@ class TimelineWidget(QWidget):
     duplicate_requested = Signal()        # 复制选中帧
     delete_requested = Signal()           # 删除选中帧
     add_requested = Signal()              # 追加空白帧
+    add_current_requested = Signal()      # 把「当前图」（首帧图 / 选中帧）追加为帧
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -78,6 +79,10 @@ class TimelineWidget(QWidget):
         T(self._del_btn, "删除当前帧", attr="tooltip")
         self._del_btn.clicked.connect(self.delete_requested.emit)
         bar.addWidget(self._del_btn)
+        self._add_current_btn = T(QPushButton(), "+ 当前图")
+        T(self._add_current_btn, "把首帧图 / 当前选中帧追加到帧列表末尾", attr="tooltip")
+        self._add_current_btn.clicked.connect(self.add_current_requested.emit)
+        bar.addWidget(self._add_current_btn)
         self._add_btn = T(QPushButton(), "+ 空白帧")
         T(self._add_btn, "追加一个空白帧", attr="tooltip")
         self._add_btn.clicked.connect(self.add_requested.emit)

@@ -419,6 +419,35 @@ QPushButton#PrimaryButton:disabled {
     border-color: #2c3550;
     color: #7f8ba6;
 }
+/* IDE 步骤条：✓ 已完成 / ▶ 当前 / ○ 未开始 */
+QPushButton#StepChip {
+    background-color: #26262b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 7px;
+    color: #8f959d;
+    padding: 4px 10px;
+    text-align: left;
+}
+QPushButton#StepChip:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #cfd4da;
+}
+QPushButton#StepChip[stepState="done"] {
+    background-color: #1f2b22;
+    border-color: #2f6a3f;
+    color: #8fd6a2;
+}
+QPushButton#StepChip[stepState="current"] {
+    background-color: #223054;
+    border-color: #4176e6;
+    color: #e8eeff;
+    font-weight: 600;
+}
+QLabel#FirstFrameThumb {
+    background-color: #202024;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 6px;
+}
 QPushButton#DangerButton {
     background-color: rgba(242, 85, 90, 0.14);
     border-color: rgba(242, 85, 90, 0.4);

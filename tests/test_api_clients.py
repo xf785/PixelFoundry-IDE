@@ -936,3 +936,428 @@ def test_http_status_exhausted_includes_body():
     assert not result.ok
     assert "HTTP 500" in result.error
     assert "server boom" in result.error
+
+
+# --------------------------------------------------------------------------- #
+# 鉴权方式（中转站适配）：bearer / x-api-key / api-key / custom / query / none
+# --------------------------------------------------------------------------- #
+def _capture_llm(params: dict):
+    """构造 LLMAPI + MockTransport，返回 (api, 捕获 dict, 请求头小写化后的副本)。"""
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["headers"] = {k.lower(): v for k, v in request.headers.items()}
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    cfg = llm_config()
+    cfg["params"].update(params)
+    return LLMAPI(cfg, transport=httpx.MockTransport(handler)), captured
+
+
+def test_auth_style_bearer_is_default():
+    """未配置 auth_style 时保持旧行为：Authorization: Bearer <key>。"""
+    api, captured = _capture_llm({})
+    assert api.call(prompt="p").ok
+    assert captured["headers"]["authorization"] == "Bearer test-key"
+
+
+def test_auth_style_x_api_key_header():
+    api, captured = _capture_llm({"auth_style": "x-api-key"})
+    assert api.call(prompt="p").ok
+    assert captured["headers"]["x-api-key"] == "test-key"
+    assert "authorization" not in captured["headers"]
+
+
+def test_auth_style_lowercase_api_key_header():
+    api, captured = _capture_llm({"auth_style": "api-key"})
+    assert api.call(prompt="p").ok
+    assert captured["headers"]["api-key"] == "test-key"
+    assert "authorization" not in captured["headers"]
+
+
+def test_auth_style_custom_header_with_prefix():
+    api, captured = _capture_llm({"auth_style": "custom", "auth_header": "X-Token", "auth_prefix": "Token "})
+    assert api.call(prompt="p").ok
+    assert captured["headers"]["x-token"] == "Token test-key"
+    assert "authorization" not in captured["headers"]
+
+
+def test_auth_style_custom_prefix_defaults_empty():
+    api, captured = _capture_llm({"auth_style": "custom", "auth_header": "X-Token"})
+    assert api.call(prompt="p").ok
+    assert captured["headers"]["x-token"] == "test-key"
+
+
+def test_auth_style_query_appends_key_to_url():
+    api, captured = _capture_llm({"auth_style": "query"})
+    assert api.call(prompt="p").ok
+    assert captured["url"] == "http://test.local/v1/chat/completions?key=test-key"
+    assert "authorization" not in captured["headers"]
+
+
+def test_auth_style_query_custom_param_name():
+    api, captured = _capture_llm({"auth_style": "query", "auth_query_param": "api_key"})
+    assert api.call(prompt="p").ok
+    assert captured["url"].endswith("?api_key=test-key")
+
+
+def test_auth_style_none_sends_no_auth():
+    api, captured = _capture_llm({"auth_style": "none"})
+    assert api.call(prompt="p").ok
+    assert "authorization" not in captured["headers"]
+    assert "key=" not in captured["url"]
+
+
+def test_extra_headers_override_auth_style():
+    """额外请求头优先级最高：能覆盖鉴权方式自动加的头。"""
+    api, captured = _capture_llm(
+        {"auth_style": "x-api-key", "extra_headers": '{"Authorization": "Bearer override", "X-API-Key": "other"}'}
+    )
+    assert api.call(prompt="p").ok
+    assert captured["headers"]["authorization"] == "Bearer override"
+    assert captured["headers"]["x-api-key"] == "other"
+
+
+def test_auth_style_applies_to_image_and_list_models():
+    """图片与「查询模型」也要走同一套鉴权方式。"""
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.setdefault("urls", []).append(str(request.url))
+        captured["headers"] = {k.lower(): v for k, v in request.headers.items()}
+        if "/models" in str(request.url):
+            return httpx.Response(200, json={"data": [{"id": "m1"}]})
+        return httpx.Response(200, json={"data": [{"url": "http://cdn/x.png"}]})
+
+    cfg = llm_config(base_url="http://img.local/v1")
+    cfg["params"]["auth_style"] = "query"
+    api = ImageAPI(cfg, transport=httpx.MockTransport(handler))
+    assert api.call(prompt="p").ok
+    assert api.list_models().ok
+    assert captured["urls"][0] == "http://img.local/v1/images/generations?key=test-key"
+    assert captured["urls"][1] == "http://img.local/v1/models?key=test-key"
+    assert "authorization" not in captured["headers"]
+
+
+def test_friendly_error_401_mentions_auth_style():
+    """401/403 的错误提示应指向「鉴权方式」（中转站最常见的坑）。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": {"message": "invalid api key"}})
+
+    cfg = llm_config()
+    api = LLMAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.call(prompt="p")
+    assert not result.ok
+    assert "401" in result.error
+    assert "鉴权方式" in result.error
+    assert "额外请求头" in result.error
+
+
+# --------------------------------------------------------------------------- #
+# 视频：新增占位符 / 提交与轮询方法 / 轮询请求体
+# --------------------------------------------------------------------------- #
+def test_video_template_new_placeholders_and_image_url():
+    """$negative_prompt/$image_raw/$image_url/$seed/$ratio/$resolution/$mode 渲染。"""
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = __import__("json").loads(request.read().decode())
+        return httpx.Response(200, json={"id": "j", "output": {"video_url": "http://c/v.mp4"}})
+
+    template = (
+        '{"model":"$model","prompt":"$prompt","negative_prompt":"$negative_prompt",'
+        '"first":"$image","raw":"$image_raw","url":"$image_url",'
+        '"seed":$seed,"ratio":"$ratio","resolution":"$resolution","mode":"$mode"}'
+    )
+    cfg = video_config(
+        payload_template=template,
+        negative_prompt='模糊, "变形"\n多余肢体',
+        seed=42,
+        ratio="16:9",
+        resolution="1080p",
+        mode="pro",
+        image_url="https://img.example.com/first.png",
+    )
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.call(image_bytes=tiny_png_bytes(), prompt="walk", frames=8, fps=8)
+    assert result.ok
+    body = captured["body"]
+    assert body["url"] == "https://img.example.com/first.png"       # $image_url
+    assert body["first"] == "data:image/png;base64," + base64.b64encode(tiny_png_bytes()).decode()
+    # $image_raw 是裸 base64（不是 data URI）
+    assert body["raw"] == base64.b64encode(tiny_png_bytes()).decode()
+    assert body["seed"] == 42
+    assert body["ratio"] == "16:9"
+    assert body["resolution"] == "1080p"
+    assert body["mode"] == "pro"
+    # 带引号/换行的负面提示词经 JSON 转义后仍是同一份文本
+    assert body["negative_prompt"] == '模糊, "变形"\n多余肢体'
+
+
+def test_video_template_image_url_empty_when_unset():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = __import__("json").loads(request.read().decode())
+        return httpx.Response(200, json={"id": "j", "output": {"video_url": "http://c/v.mp4"}})
+
+    cfg = video_config(payload_template='{"url":"$image_url","prompt":"$prompt"}')
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    assert api.call(image_bytes=tiny_png_bytes(), prompt="p").ok
+    assert captured["body"]["url"] == ""
+
+
+def test_video_submit_method_put_sends_json_body():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["body"] = __import__("json").loads(request.read().decode())
+        return httpx.Response(200, json={"id": "j", "output": {"video_url": "http://c/v.mp4"}})
+
+    cfg = video_config(submit_method="PUT", payload_template='{"model":"$model","prompt":"$prompt"}')
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    assert api.call(image_bytes=tiny_png_bytes(), prompt="car").ok
+    assert captured["method"] == "PUT"
+    assert captured["body"]["prompt"] == "car"
+
+
+def test_video_submit_method_get_flattens_template_to_query():
+    """submit_method=GET：模板摊平成查询参数（仅标量，嵌套用 a.b）。"""
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["url"] = str(request.url)
+        captured["body"] = request.content.decode()
+        return httpx.Response(200, json={"id": "j", "output": {"video_url": "http://c/v.mp4"}})
+
+    cfg = video_config(
+        submit_method="GET",
+        payload_template='{"model": "$model", "prompt": "$prompt", "options": {"mode": "$mode", "n": 2}, "tags": ["a"]}',
+        mode="std",
+    )
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    assert api.call(image_bytes=tiny_png_bytes(), prompt="cat").ok
+    assert captured["method"] == "GET"
+    assert captured["body"] == ""            # GET 不带请求体
+    url = captured["url"]
+    assert "model=gpt-test" in url
+    assert "prompt=cat" in url
+    assert "options.mode=std" in url        # 嵌套标量用点号摊平
+    assert "options.n=2" in url
+    assert "tags" not in url                # 数组整体不发送
+
+
+def test_video_poll_payload_template_gets_task_id():
+    """轮询方法为 POST 时发送 poll_payload_template，$task_id 填入任务 ID。"""
+    captured = {"polls": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = __import__("json").loads(request.read().decode())
+        if str(request.url).endswith("/submit"):     # 提交与轮询都是 POST：按 URL 区分
+            captured["submit"] = body
+            return httpx.Response(200, json={"data": {"task_id": "abc-1"}})
+        captured["polls"].append(body)
+        if len(captured["polls"]) < 2:
+            return httpx.Response(200, json={"data": {"task_id": "abc-1", "status": "running"}})
+        return httpx.Response(200, json={"data": {"task_id": "abc-1", "status": "succeeded", "video_url": "http://c/v.mp4"}})
+
+    cfg = video_config(
+        provider="custom",
+        submit_url="{base}/submit",
+        poll_url="{base}/query",
+        poll_method="POST",
+        poll_payload_template='{"task_id": "$task_id", "action": "query"}',
+        job_id_path="data.task_id",
+        status_path="data.status",
+        result_video_url_path="data.video_url",
+    )
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.call(image_bytes=tiny_png_bytes(), prompt="p", frames=8, fps=8)
+    assert result.ok
+    assert captured["polls"], "轮询应使用 POST + 请求体"
+    assert captured["polls"][0] == {"task_id": "abc-1", "action": "query"}
+
+
+# --------------------------------------------------------------------------- #
+# 提交请求预览（不联网、Key 打码）
+# --------------------------------------------------------------------------- #
+def test_preview_request_no_network_and_key_redacted():
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - 不应被调用
+        raise AssertionError("preview_request 不应发起任何网络请求")
+
+    cfg = video_config(payload_template='{"model":"$model","prompt":"$prompt","image":"$image"}')
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    preview = api.preview_request(tiny_png_bytes(), "walk", frames=8, fps=8)
+    assert preview["method"] == "POST"
+    assert preview["url"] == "http://video.local/v1/videos/generations"
+    assert preview["headers"]["Authorization"] == "Bearer ***"
+    assert "test-key" not in str(preview)
+    assert preview["body"]["prompt"] == "walk"
+    assert preview["body"]["image"].startswith("data:image/png;base64,")
+
+
+def test_preview_request_redacts_query_auth():
+    """鉴权方式为查询参数时，URL 上的 Key 也要打码。"""
+    cfg = video_config(auth_style="query")
+    api = VideoAPI(cfg)
+    preview = api.preview_request(tiny_png_bytes(), "walk")
+    assert "test-key" not in preview["url"]
+    assert preview["url"].endswith("?key=***")
+
+
+# --------------------------------------------------------------------------- #
+# 测试并检测字段（probe）
+# --------------------------------------------------------------------------- #
+def test_probe_suggests_paths_from_response():
+    """probe 只发一次提交请求，并从返回结构里猜出可用字段路径。"""
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(
+            200,
+            json={"data": {"task_id": "abc", "status": "running", "video": {"url": "https://x/v.mp4"}}},
+        )
+
+    cfg = video_config()
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.probe(tiny_png_bytes(), "a small red cube rotating")
+    assert result.ok
+    assert calls["n"] == 1, "probe 只应发一次提交请求，不轮询"
+    data = result.data
+    assert data["status_code"] == 200
+    assert data["json"]["data"]["task_id"] == "abc"
+    assert "task_id" in data["raw_text"]
+    assert data["request"]["headers"]["Authorization"] == "Bearer ***"
+    suggestions = data["suggestions"]
+    assert "data.task_id" in suggestions["job_id_path"]
+    assert "data.status" in suggestions["status_path"]
+    assert "data.video.url" in suggestions["result_video_url_path"]
+
+
+def test_probe_http_error_does_not_raise():
+    """5xx 时 probe 返回 ok=False，并把响应体带进错误信息（不抛异常）。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="upstream boom")
+
+    cfg = video_config(max_retries=0)
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.probe(tiny_png_bytes(), "p")
+    assert not result.ok
+    assert "500" in result.error and "upstream boom" in result.error
+    assert result.data["status_code"] == 500
+    assert result.data["suggestions"]["job_id_path"] == []
+
+
+def test_probe_network_error_does_not_raise():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    cfg = video_config(max_retries=0)
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.probe(tiny_png_bytes(), "p")
+    assert not result.ok and result.error
+
+
+# --------------------------------------------------------------------------- #
+# 路径回退：中转站返回结构不一致时仍能跑通
+# --------------------------------------------------------------------------- #
+def test_video_job_id_fallback_data_task_id():
+    """job_id_path 默认 id 取不到时，回退到 data.task_id 继续轮询。"""
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if request.method == "POST":
+            return httpx.Response(200, json={"data": {"task_id": "relay-1", "status": "queued"}})
+        assert str(request.url).endswith("/videos/generations/relay-1")
+        return httpx.Response(200, json={"data": {"task_id": "relay-1", "status": "succeeded", "video_url": "http://c/r.mp4"}})
+
+    api = VideoAPI(video_config(), transport=httpx.MockTransport(handler))
+    result = api.call(image_bytes=tiny_png_bytes(), prompt="p")
+    assert result.ok
+    assert result.data["video_url"] == "http://c/r.mp4"
+    assert result.data["job_id"] == "relay-1"
+    assert calls["n"] == 2
+
+
+def test_video_result_url_fallback_videos_array():
+    """result_video_url_path 失效时，回退到 videos.0.url 等常见路径。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json={"id": "job-9", "status": "processing"})
+        return httpx.Response(
+            200,
+            json={"id": "job-9", "status": "succeeded", "videos": [{"url": "http://c/fallback.mp4"}]},
+        )
+
+    # result_video_url_path 指向一个不存在的路径 -> 触发回退
+    cfg = video_config(result_video_url_path="data.nope.url")
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.call(image_bytes=tiny_png_bytes(), prompt="p")
+    assert result.ok
+    assert result.data["video_url"] == "http://c/fallback.mp4"
+
+
+def test_video_sync_result_with_unknown_paths():
+    """提交响应直接带结果（结构不认识）时也能同步返回，不必轮询。"""
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(200, json={"data": {"request_id": "r-1", "outputs": [{"url": "http://c/sync2.mp4"}]}})
+
+    cfg = video_config(result_video_url_path="")
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.call(image_bytes=tiny_png_bytes(), prompt="p")
+    assert result.ok
+    assert result.data["video_url"] == "http://c/sync2.mp4"
+    assert calls["n"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# 连通性测试分类（中转站根路径 401/404 都是常态）
+# --------------------------------------------------------------------------- #
+def test_test_connection_404_is_reachable_with_note():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="not found")
+
+    api = VideoAPI(video_config(), transport=httpx.MockTransport(handler))
+    result = api.test_connection()
+    assert result.ok
+    assert "404" in str(result.data)
+    assert "端点" in str(result.data) or "检测字段" in str(result.data)
+
+
+def test_test_connection_401_reports_auth_problem():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, text="unauthorized")
+
+    api = VideoAPI(video_config(), transport=httpx.MockTransport(handler))
+    result = api.test_connection()
+    assert not result.ok
+    assert "鉴权" in result.error
+    assert "鉴权方式" in result.error
+
+
+def test_test_connection_ok_on_2xx():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "ok"})
+
+    api = VideoAPI(video_config(), transport=httpx.MockTransport(handler))
+    result = api.test_connection()
+    assert result.ok
+    assert "服务可达" in str(result.data)
+
+
+def test_test_connection_network_error_never_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("dns fail")
+
+    api = VideoAPI(video_config(max_retries=0), transport=httpx.MockTransport(handler))
+    result = api.test_connection()
+    assert not result.ok and result.error

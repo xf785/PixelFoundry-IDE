@@ -33,12 +33,12 @@ middle, results and log on the right.</em></p>
 
 - 🚀 **One-click Solo pipeline** — text → animation → pixel art, fully automated. Works offline with deterministic mock APIs, no keys required.
 - 🎯 **Perfect-pixel engine** — frame-0 grid detection (FFT + purity/boundary search) + exact per-cell sampling on every frame, so colors stay precise and edges stay hard.
-- 🎬 **IDE step workspace** — 6 independently runnable steps, step-aware parameter panel, frame timeline, live keying preview.
+- 🎬 **IDE step workspace** — 6 independently runnable steps with a **top step bar** (✓ done / ▶ current), a three-column dock layout (assets / preview + timeline / params + log) and live keying preview.
 - 🧩 **Sprite sheets** — one img2img call produces a whole i×j grid sheet, auto-cropped, loop-closed and keyed.
 - 🖌️ **Krita-style pixel editor** — color-family palette with right-click whole-family replace, right-click color wheel, selection & floating layers, onion skin, palette lock.
 - 🖼️ **Standalone pixel board** — 4th mode with resolution settings, two-way IDE sync, and video-first-frame handoff (NEAREST upscale, never blurry); Krita-style resizable docks plus a **tile/prop pack browser** that browses **every folder level** inside a pack (atlases, individual tiles, textures, raw sheets), with category switcher, search, thumbnails, place/replace on canvas and auto-restore |
 - 🌐 **Bilingual + scalable UI** — Chinese / English, UI scale 0.8×–1.5×, self-drawn DSH-style icons.
-- 🔌 **Provider-agnostic** — one-click presets for DeepSeek, Kimi, Zhipu, SiliconFlow, Ark, DashScope, Hunyuan, Ollama, gpt.ge, Kling… plus proxy & SSL options.
+- 🔌 **Provider-agnostic & relay-friendly** — one-click presets for DeepSeek, Kimi, Zhipu, SiliconFlow, Ark, DashScope, Hunyuan, Ollama, gpt.ge, Kling… plus proxy & SSL options. The **video API is fully configurable**: six auth styles (Bearer / X-API-Key / api-key / query param / custom header / none), configurable submit & poll endpoints, methods and body templates, **paste “Copy as cURL” to import a whole config**, and **Preview request / Test & detect fields** to auto-discover the task-id, status and video-URL paths (see the [API setup guide](docs/api_setup.md)).
 - 📦 **Open source** — MIT license, CI on GitHub Actions (Win + Linux), Windows releases via PyInstaller.
 
 ## 🚀 Quick Start
@@ -76,10 +76,17 @@ The UI supports **Chinese / English** — switch in **Settings → General → L
 
 The top-left **2×2 icon switch** (Solo ✦ / IDE ⊞ / Sprites ▤ / Pixel ▦) opens **IDE** (left rail expands). The Solo pipeline is split into **6 independently runnable steps** — text → image → animation → pixelize → background removal → export:
 
-- The **right parameter panel follows the selected step** and is **collapsed by default** (one chevron to expand); the bottom log box can be collapsed/expanded.
+- **Step bar on top**: the 6 steps sit on one row as `✓ done / ▶ current / ○ pending`, so progress and "what next" are obvious — click a step to jump to it. The primary *run this step* button sits at its right (kept in sync with the one at the bottom of the parameter dock).
+- **Three-column workspace** (every splitter is draggable and widths/collapsed states are remembered):
+  - left **Assets** — project (new / open / save) plus **reference / first frame** (first-frame thumbnail and *Use current frame as first frame*);
+  - centre **Preview / Edit / Prompts** with the **timeline right underneath** (frame thumbnails sit directly below the canvas, so editing a frame needs no tab hunting);
+  - right **Parameters** (follows the selected step, **expanded by default**) and **Log** (collapsible, one-click clear).
+- **First frame and frame sequence are fully connected**:
+  - after generating a first frame, **+ Current image** appends it to the frame sequence; while the sequence is still empty the **editor opens the first frame itself** (no more blank canvas);
+  - **Use current frame as first frame** promotes the selected timeline frame; if no first frame is ever set, the Animation step **falls back to frame 1 of the sequence** and says so in the log instead of erroring out.
 - **No full pipeline needed**: import your own image as **reference / first frame**, then jump straight to the Animation step (image as first frame) or the Image step (i2i).
 - **Prompts** tab for hand-editing; **Preview** plays the animation (cursor-focus wheel zoom, crisp NEAREST sampling, speed control); **Edit** edits pixels.
-- Bottom **timeline**: click to select, drag to reorder, insert/duplicate/delete/append frames.
+- **Timeline**: click to select, drag to reorder, insert / duplicate / delete / **append current image** / append blank frame.
 - **Pixel editor**: canvas fills the panel; controls live in a right icon column (left-click = tool, right-click = second-level options) and a collapsible bottom color-family bar. Four background modes (checker/white/black/green), grid toggle, Ctrl+wheel cursor-focus zoom, Ctrl+left-drag pan, **right-drag region fill**.
 - **Selection & layers**: rect / lasso / Ctrl+click multi-select → **Ctrl+C copy → Ctrl+V paste as a semi-transparent floating layer** → **Ctrl+right-drag move (any tool)** → **Ctrl+M merge** (Esc cancels).
 - **Color families + color wheel**: colors auto-cluster into families (White / Red / Light-red…); right-click a family to replace it wholesale **preserving the inner gradient**; right-click-and-hold on the canvas opens a **Krita-style color wheel** (hue ring + S/V square + recent colors).
@@ -225,6 +232,8 @@ Provider differences are configured in **Settings** — no code changes:
 - **LLM / Image** (OpenAI-compatible): provider root URL; if the path differs (`404 Invalid URL`), set the **endpoint path** or a full URL override. **i2i upload mode**: data URI by default; gpt.ge requires **multipart file upload** (`image_mode=multipart`, auto-enabled for `api.gpt.ge`). **Size fallback**: rejected sizes auto-retry at 512/768/1024/1536.
 - **Video**: `generic` (OpenAI-compatible polling), **Doubao Seedance (Ark)**, **gpt.ge V-API** presets; request-body templates with `$model/$prompt/$image/$frames/$fps/$duration` placeholders; `submit_url`/`poll_url` support `{base}`/`{id}`; polling fields configurable; **`last_frame`** sends the first frame as the last for first/last consistency.
 - **Proxy / SSL**: per-API advanced options — proxy URL for blocked networks, `verify_ssl` toggle; network errors auto-retry with troubleshooting hints.
+
+📖 **Full guide (Chinese, with an English summary): [`docs/api_setup.md`](docs/api_setup.md)** — authentication styles, relay shapes, import from curl, preview request / test & detect fields, polling parameters and the troubleshooting table.
 
 ## 📁 Project Layout
 

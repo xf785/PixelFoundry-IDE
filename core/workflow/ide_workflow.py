@@ -277,19 +277,30 @@ class IdeWorkflow(WorkflowLogMixin):
     # ------------------------------------------------------------------ #
     def step_animation(self, session: IdeSession, prompt: Optional[str] = None) -> List[Image.Image]:
         """图转视频 → 拆帧/采样，写入 session.frames 并返回。"""
-        if session.first_frame is None:
-            raise WorkflowError(tr("请先生成或导入首帧图片"), step="动画生成")
+        first = session.first_frame
+        if first is None and session.frames:
+            # 用户可能直接手绘/导入了帧序列而没单独设首帧：用第一帧顶上，
+            # 而不是直接报「请先生成或导入首帧图片」（旧版这里会卡住流程）
+            first = session.frames[0]
+            session.first_frame = first.convert("RGBA").copy()
+            self._log_msg("info", tr("未单独设置首帧图，改用帧序列第 1 帧作为首帧"))
+        if first is None:
+            raise WorkflowError(
+                tr("缺少首帧图片：请先执行「{0}」，或在「资源」栏添加参考图，"
+                   "或在时间轴用「+ 当前图」添加一帧后点「用当前帧作为首帧」").format(tr("生成首帧图片")),
+                step="动画生成",
+            )
         anim_prompt = (prompt or session.prompts.get("animation_prompt") or "smooth looping animation").strip()
         parts = [anim_prompt, SUBJECT_MARGIN_RULE]
         if session.force_pure_bg:
             # 背景稳定规则必须与首帧实际背景一致：首帧角落为黑色（浅色主体
             # 归一化成黑底 / 用户自备黑底图）时用黑底规则，否则默认白底规则
-            if _corner_tone(session.first_frame) == "black":
+            if _corner_tone(first) == "black":
                 parts.append(BACKGROUND_STABILITY_RULE_DARK)
             else:
                 parts.append(BACKGROUND_STABILITY_RULE)
         anim_prompt = " ".join(parts)
-        first_bytes = fu.image_to_bytes(session.first_frame, "PNG")
+        first_bytes = fu.image_to_bytes(first, "PNG")
         if session.video_image_min_side:
             # 首帧过小时最近邻放大到 API 最低要求（像素画不模糊）
             first_bytes = fu.upscale_to_min_side_bytes(first_bytes, min_side=session.video_image_min_side)

@@ -1015,37 +1015,58 @@ def test_pixel_editor_palette_shows_families(qtbot):
 
 
 def test_ide_step_params_switch_with_step(qtbot, ctx):
-    """IDE 右侧参数面板随左侧步骤切换：只显示对应步骤的参数。"""
+    """IDE 参数面板与顶部步骤条随步骤切换：只显示对应步骤的参数。"""
     from ui.pages.ide_page import IdePage
 
     page = IdePage(ctx)
     qtbot.addWidget(page)
     page.show()
     assert page._step_params.count() == 6
+    assert page._step_bar.current() == 0
     page.set_current_step(0)
     assert page._step_params.currentIndex() == 0
     page.set_current_step(2)
     assert page._step_params.currentIndex() == 2
+    assert page._step_bar.current() == 2
+    assert page._btn_run_top.text() == page._btn_run.text() == "生成动画"
     page.set_current_step(5)
     assert page._step_params.currentIndex() == 5
     assert page._btn_run.text() == "导出"
+    # 点击步骤条也能切步骤（与主窗口侧栏同步）
+    page._step_bar.step_selected.emit(1)
+    assert page._current_step == 1
 
 
-def test_ide_params_panel_default_collapsed(qtbot, ctx):
-    """IDE 右侧参数面板（提示词/文生图等）默认收起，仅三角钮；点击展开。"""
+def test_ide_step_bar_tracks_progress(qtbot, ctx):
+    """步骤条显示流水线进度：跑完一步打勾。"""
     from ui.pages.ide_page import IdePage
 
     page = IdePage(ctx)
     qtbot.addWidget(page)
     page.show()
+    assert not page._step_bar.is_done(0)
+    page._mark_step_done(0)
+    assert page._step_bar.is_done(0)
+    page._reset_steps_done()
+    assert not page._step_bar.is_done(0)
+
+
+def test_ide_params_panel_default_expanded(qtbot, ctx):
+    """IDE 参数面板默认展开（旧版默认收起，进页面几乎什么都看不到）。"""
+    from ui.pages.ide_page import IdePage
+
+    page = IdePage(ctx)
+    qtbot.addWidget(page)
+    page.show()
+    assert page._params_collapsed is False
+    assert page._params_scroll.isVisible()
+    assert not page._left_dock.is_collapsed(), "左侧资源栏默认展开"
+    page._on_toggle_params()
     assert page._params_collapsed is True
     assert not page._params_scroll.isVisible()
     page._on_toggle_params()
     assert page._params_collapsed is False
     assert page._params_scroll.isVisible()
-    page._on_toggle_params()
-    assert page._params_collapsed is True
-    assert not page._params_scroll.isVisible()
 
 
 def test_ide_log_collapsible(qtbot, ctx):

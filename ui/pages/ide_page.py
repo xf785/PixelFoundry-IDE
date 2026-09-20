@@ -70,6 +70,7 @@ from ui.widgets.dock import RAIL_W, SideDock
 from ui.widgets.image_viewer import ImageViewer
 from ui.widgets.pixel_editor import PixelEditorWidget
 from ui.widgets.reference_box import ReferenceImageBox
+from ui.widgets.step_bar import StepBar
 from ui.widgets.timeline import TimelineWidget
 from ui.workers import IdeStepWorker
 
@@ -78,6 +79,7 @@ logger = logging.getLogger("PixelFoundry.ui.ide_page")
 _LOG_COLORS = {"info": "#adb2b8", "warn": "#f59e0b", "error": "#f25a5a"}
 
 PARAM_WIDTH = 360
+ASSET_WIDTH = 236
 
 # 步骤 -> 执行按钮文案（zh 原文 + 运行时翻译）
 STEP_ACTIONS_ZH = ["生成提示词", "生成首帧图片", "生成动画", "像素化处理", "去除背景", "导出"]
@@ -98,6 +100,8 @@ class IdePage(QWidget):
         self._play_timer = QTimer(self)
         self._play_timer.timeout.connect(self._on_play_tick)
         self._dirty = False
+        self._editing_first_frame = False   # 帧列表为空时编辑器编辑的是首帧图
+        self._step_done: set = set()        # 已完成步骤（步骤条上打勾）
         self._build_ui()
         self._restore_layout()
         self._restore_settings()
@@ -111,28 +115,41 @@ class IdePage(QWidget):
         root.setContentsMargins(12, 12, 12, 10)
         root.setSpacing(8)
 
-        # ---------- 工作区：预览/编辑/提示词 | 参数停靠栏（两栏可拖动调宽） ----------
+        # ---------- 顶部：步骤条（进度可见、点一下切换）+ 主执行按钮 ----------
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        self._step_bar = StepBar(STEP_ACTIONS_ZH)
+        self._step_bar.step_selected.connect(self.set_current_step)
+        top.addWidget(self._step_bar, 1)
+        self._btn_run_top = T(QPushButton(), "生成提示词")
+        self._btn_run_top.setObjectName("PrimaryButton")
+        self._btn_run_top.setMinimumHeight(scaled(30))
+        self._btn_run_top.setMinimumWidth(scaled(120))
+        T(self._btn_run_top, "执行当前步骤（与右侧参数栏底部按钮相同）", attr="tooltip")
+        self._btn_run_top.clicked.connect(self._on_run_step)
+        top.addWidget(self._btn_run_top)
+        root.addLayout(top)
+
+        # ---------- 三栏工作区：资源 | 预览/编辑/提示词 + 时间轴 | 参数 ----------
         self._splitter = QSplitter(Qt.Orientation.Horizontal)
         self._splitter.setObjectName("Workspace")
         self._splitter.setChildrenCollapsible(False)
         self._splitter.setHandleWidth(scaled(5))
 
-        # 中：预览 / 编辑 / 提示词
+        # 左：资源（项目 / 参考图 / 首帧图）
+        self._splitter.addWidget(self._build_asset_panel())
+
+        # 中：上「预览 / 编辑 / 提示词」，下时间轴（帧与画面挨在一起，改帧不用来回找）
+        center = QSplitter(Qt.Orientation.Vertical)
+        center.setObjectName("IdeCenter")
+        center.setChildrenCollapsible(False)
+        center.setHandleWidth(scaled(5))
         self._tabs = QTabWidget()
         self._build_preview_tab()
         self._build_editor_tab()
         self._build_prompt_tab()
-        self._splitter.addWidget(self._tabs)
+        center.addWidget(self._tabs)
 
-        # 右：参数停靠栏（默认整栏收起成竖排标签，可拖动调宽、面板可折叠）
-        self._splitter.addWidget(self._build_params_panel())
-        self._splitter.setStretchFactor(0, 1)
-        self._splitter.setStretchFactor(1, 0)
-        self._right_dock.bind_splitter(self._splitter, 1, default_width=PARAM_WIDTH)
-        self._splitter.setSizes([scaled(820), scaled(PARAM_WIDTH)])
-        root.addWidget(self._splitter, 1)
-
-        # ---------- 底：时间轴 + 状态 + 日志 ----------
         self._timeline = TimelineWidget()
         self._timeline.frame_selected.connect(self._on_frame_selected)
         self._timeline.reordered.connect(self._on_reordered)
@@ -140,10 +157,29 @@ class IdePage(QWidget):
         self._timeline.duplicate_requested.connect(self._on_duplicate_frame)
         self._timeline.delete_requested.connect(self._on_delete_frame)
         self._timeline.add_requested.connect(self._on_add_frame)
-        root.addWidget(self._timeline)
+        self._timeline.add_current_requested.connect(self._on_add_current_frame)
+        center.addWidget(self._timeline)
+        center.setStretchFactor(0, 1)
+        center.setStretchFactor(1, 0)
+        center.setSizes([scaled(460), scaled(140)])
+        self._center_splitter = center
+        self._splitter.addWidget(center)
 
+        # 右：参数（默认展开，避免「进来什么都没有」）+ 日志
+        self._splitter.addWidget(self._build_params_panel())
+        self._splitter.setStretchFactor(0, 0)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setStretchFactor(2, 0)
+        self._left_dock.bind_splitter(self._splitter, 0, default_width=ASSET_WIDTH)
+        self._right_dock.bind_splitter(self._splitter, 2, default_width=PARAM_WIDTH)
+        self._splitter.setSizes([scaled(ASSET_WIDTH), scaled(760), scaled(PARAM_WIDTH)])
+        root.addWidget(self._splitter, 1)
+
+        # ---------- 底部：状态行 ----------
         status_row = QHBoxLayout()
-        self._status_label = T(QLabel(), "就绪")
+        # 状态行由 _update_status() 动态拼接（帧数 / 画布尺寸 / 下一步），不用 T() 注册，
+        # 否则语言切换时注册表会把它回退成裸的「就绪」
+        self._status_label = QLabel(tr("就绪"))
         self._status_label.setObjectName("StepLabel")
         status_row.addWidget(self._status_label)
         status_row.addStretch(1)
@@ -151,27 +187,6 @@ class IdePage(QWidget):
         self._dirty_label.setObjectName("HintLabel")
         status_row.addWidget(self._dirty_label)
         root.addLayout(status_row)
-
-        # 日志标题行 + 收起/展开按钮
-        log_header = QHBoxLayout()
-        log_label = QLabel(tr("日志"))
-        log_label.setObjectName("HintLabel")
-        log_header.addWidget(log_label)
-        log_header.addStretch(1)
-        self._log_toggle_btn = QToolButton()
-        self._log_toggle_btn.setText("▾")
-        self._log_toggle_btn.setFixedSize(20, 20)
-        T(self._log_toggle_btn, "收起/展开日志", attr="tooltip")
-        self._log_toggle_btn.clicked.connect(self._on_toggle_log)
-        log_header.addWidget(self._log_toggle_btn)
-        root.addLayout(log_header)
-
-        self._log_view = QPlainTextEdit()
-        self._log_view.setObjectName("LogView")
-        self._log_view.setReadOnly(True)
-        self._log_view.setMaximumHeight(110)
-        self._log_collapsed = False
-        root.addWidget(self._log_view)
 
     # ------------------------------------------------------------------ #
     # 主窗口工具条协议（Krita 风格：工具条内容随工作区变化）
@@ -331,36 +346,52 @@ class IdePage(QWidget):
         self._log_toggle_btn.setText("▴" if self._log_collapsed else "▾")
 
     def apply_ui_scale(self, scale: float) -> None:
-        """按界面比例调整参数停靠栏与分隔条（接口比例由全局 scaled() 取值）。"""
+        """按界面比例调整停靠栏与分隔条（接口比例由全局 scaled() 取值）。"""
         if hasattr(self, "_params_scroll"):
             self._params_scroll.setMinimumWidth(scaled(200))
         if hasattr(self, "_params_toggle_btn"):
             self._params_toggle_btn.setFixedSize(scaled(20), scaled(20))
             self._params_toggle_btn.setIconSize(QSize(scaled(14), scaled(14)))
-        if hasattr(self, "_right_dock"):
-            self._right_dock.apply_ui_scale()
-        if hasattr(self, "_splitter"):
-            self._splitter.setHandleWidth(scaled(5))
+        if hasattr(self, "_first_frame_thumb"):
+            self._first_frame_thumb.setFixedSize(scaled(48), scaled(48))
+        for name in ("_left_dock", "_right_dock"):
+            dock = getattr(self, name, None)
+            if dock is not None:
+                dock.apply_ui_scale()
+        for name in ("_splitter", "_center_splitter"):
+            splitter = getattr(self, name, None)
+            if splitter is not None:
+                splitter.setHandleWidth(scaled(5))
+        if hasattr(self, "_btn_run_top"):
+            self._btn_run_top.setMinimumHeight(scaled(30))
+            self._btn_run_top.setMinimumWidth(scaled(120))
 
     # ------------------------------------------------------------------ #
-    # 布局持久化（停靠栏宽度 + 收起状态）
+    # 布局持久化（三栏宽度 + 两侧收起状态 + 中栏上下比例）
     # ------------------------------------------------------------------ #
     def _restore_layout(self) -> None:
-        """恢复上次的停靠栏宽度与参数栏收起状态。"""
+        """恢复上次的停靠栏宽度与收起状态（病态布局自动回退默认值）。"""
         try:
             s = self._ctx.ui_settings
             sizes = s.get("ide_dock_sizes") or []
-            if (isinstance(sizes, (list, tuple)) and len(sizes) == 2
-                    and int(sizes[0]) >= scaled(320)):
-                # 预览区过窄说明上次保存的是病态布局 -> 退回默认宽度
+            if (isinstance(sizes, (list, tuple)) and len(sizes) == 3
+                    and int(sizes[1]) >= scaled(360)):
+                # 中栏（预览+时间轴）过窄说明上次保存的是病态布局 -> 退回默认宽度
                 self._splitter.setSizes([int(v) for v in sizes])
-                if int(sizes[1]) > scaled(RAIL_W):
-                    # 展开时按上次拖动的宽度还原（而不是默认宽度）
-                    self._right_dock.bind_splitter(self._splitter, 1, default_width=int(sizes[1]))
+                if int(sizes[0]) > scaled(RAIL_W):
+                    self._left_dock.bind_splitter(self._splitter, 0, default_width=int(sizes[0]))
+                if int(sizes[2]) > scaled(RAIL_W):
+                    self._right_dock.bind_splitter(self._splitter, 2, default_width=int(sizes[2]))
+            center = s.get("ide_center_sizes") or []
+            if isinstance(center, (list, tuple)) and len(center) == 2 and int(center[0]) >= scaled(200):
+                self._center_splitter.setSizes([int(v) for v in center])
             saved = s.get("ide_params_collapsed")
             if saved is not None:
                 self._params_collapsed = bool(saved)
                 self._apply_params_collapsed()
+            left_saved = s.get("ide_left_collapsed")
+            if left_saved is not None:
+                self._left_dock.set_collapsed(bool(left_saved))
         except Exception as exc:  # noqa: BLE001
             logger.warning("IDE 页布局恢复失败: %s", exc)
 
@@ -368,7 +399,9 @@ class IdePage(QWidget):
         try:
             s = self._ctx.ui_settings
             s.set("ide_dock_sizes", list(self._splitter.sizes()))
+            s.set("ide_center_sizes", list(self._center_splitter.sizes()))
             s.set("ide_params_collapsed", bool(self._params_collapsed))
+            s.set("ide_left_collapsed", bool(self._left_dock.is_collapsed()))
         except Exception as exc:  # noqa: BLE001
             logger.warning("IDE 页布局保存失败: %s", exc)
 
@@ -377,11 +410,10 @@ class IdePage(QWidget):
         super().hideEvent(event)
 
     # ------------------------------------------------------------------ #
-    def _build_params_panel(self) -> QWidget:
-        """右侧参数停靠栏：项目 / 参考图 / 步骤参数 三块可折叠面板。"""
-        dock = SideDock(tr("参数"), side="right", default_width=PARAM_WIDTH)
-        self._right_dock = dock
-        dock.collapsedChanged.connect(self._on_dock_collapsed_changed)
+    def _build_asset_panel(self) -> QWidget:
+        """左侧资源停靠栏：项目 + 参考图 / 首帧图（这两块原先挤在右侧且默认收起）。"""
+        dock = SideDock(tr("资源"), side="left", default_width=ASSET_WIDTH)
+        self._left_dock = dock
 
         # ---- 项目 ----
         proj_box = QGroupBox(tr("项目"))
@@ -389,26 +421,19 @@ class IdePage(QWidget):
         pf.setContentsMargins(12, 18, 12, 12)
         pf.setSpacing(6)
         self._btn_new = QPushButton(tr("新建"))
+        T(self._btn_new, "清空工作区，从头开始", attr="tooltip")
         self._btn_new.clicked.connect(self._on_new)
         pf.addWidget(self._btn_new)
         self._btn_open = QPushButton(tr("打开"))
+        T(self._btn_open, "打开已保存的 IDE 项目（帧序列 + 首帧图）", attr="tooltip")
         self._btn_open.clicked.connect(self._on_open_project)
         pf.addWidget(self._btn_open)
         self._btn_save = QPushButton(tr("保存"))
+        T(self._btn_save, "保存项目：帧序列 PNG + 首帧图 + 参数", attr="tooltip")
         self._btn_save.clicked.connect(self._on_save_project)
         pf.addWidget(self._btn_save)
         proj_panel = dock.add_docker("项目", proj_box, icon_kind="layers")
         proj_panel.set_icon("layers")
-
-        # 标题栏里的「收起整栏」三角钮（收起后点竖排标签即可展开）
-        self._params_toggle_btn = QToolButton()
-        self._params_toggle_btn.setObjectName("DockToggle")
-        self._params_toggle_btn.setAutoRaise(True)
-        self._params_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._params_toggle_btn.setIconSize(QSize(scaled(14), scaled(14)))
-        self._params_toggle_btn.setFixedSize(scaled(20), scaled(20))
-        self._params_toggle_btn.clicked.connect(self._on_toggle_params)
-        proj_panel.add_header_widget(self._params_toggle_btn)
 
         # ---- 参考图 / 首帧图 ----
         img_box = QGroupBox(tr("参考图 / 首帧图"))
@@ -429,8 +454,41 @@ class IdePage(QWidget):
         col.addWidget(hint)
         ref_row.addLayout(col, 1)
         ib.addLayout(ref_row)
+
+        # 首帧图来源一目了然：动画步骤实际会把哪张图送进视频 API
+        ff_row = QHBoxLayout()
+        ff_row.setSpacing(8)
+        self._first_frame_thumb = QLabel()
+        self._first_frame_thumb.setFixedSize(scaled(48), scaled(48))
+        self._first_frame_thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._first_frame_thumb.setObjectName("FirstFrameThumb")
+        T(self._first_frame_thumb, "将作为首帧送入视频 API 的图片", attr="tooltip")
+        ff_row.addWidget(self._first_frame_thumb)
+        ff_col = QVBoxLayout()
+        ff_col.setSpacing(3)
+        # 文案由 _refresh_first_frame_row() 动态生成（含「未设置」/尺寸两种形态），
+        # 不用 T() 注册，避免语言切换时被注册表覆盖成与当前状态不符的文案
+        self._first_frame_label = QLabel(tr("首帧图：未设置（生成首帧图片，或用当前帧作为首帧）"))
+        self._first_frame_label.setObjectName("HintLabel")
+        self._first_frame_label.setWordWrap(True)
+        ff_col.addWidget(self._first_frame_label)
+        self._btn_first_from_current = T(QPushButton(), "用当前帧作为首帧")
+        T(self._btn_first_from_current, "把时间轴当前选中的帧设为动画生成的首帧图", attr="tooltip")
+        self._btn_first_from_current.clicked.connect(self._set_first_frame_from_current)
+        self._btn_first_from_current.setEnabled(False)
+        ff_col.addWidget(self._btn_first_from_current)
+        ff_row.addLayout(ff_col, 1)
+        ib.addLayout(ff_row)
         img_panel = dock.add_docker("参考图 / 首帧图", img_box, icon_kind="import_image")
         img_panel.set_icon("import_image")
+        return dock
+
+    # ------------------------------------------------------------------ #
+    def _build_params_panel(self) -> QWidget:
+        """右侧参数停靠栏：步骤参数（默认展开）+ 日志。"""
+        dock = SideDock(tr("参数"), side="right", default_width=PARAM_WIDTH)
+        self._right_dock = dock
+        dock.collapsedChanged.connect(self._on_dock_collapsed_changed)
 
         # ---- 分步骤参数（随步骤切换）+ 执行按钮 ----
         scroll = QScrollArea()
@@ -444,7 +502,7 @@ class IdePage(QWidget):
         layout.setContentsMargins(0, 0, 6, 0)
         layout.setSpacing(10)
 
-        # 分步骤参数：随左侧步骤切换只显示本步骤相关参数
+        # 分步骤参数：随步骤切换只显示本步骤相关参数
         self._step_params = QStackedWidget()
         self._step_params.addWidget(self._build_step_text_panel())    # 0 文本
         self._step_params.addWidget(self._build_step_image_panel())   # 1 图片
@@ -462,11 +520,49 @@ class IdePage(QWidget):
         layout.addWidget(self._btn_run)
 
         scroll.setWidget(host)
-        step_panel = dock.add_docker("步骤参数", scroll, icon_kind="palette", stretch=1)
-        step_panel.set_icon("palette")
 
-        # 默认收起整栏（仅竖排标签），点击展开
-        self._params_collapsed = True
+        # 标题栏里的「收起整栏」三角钮（收起后点竖排标签即可展开）
+        self._params_toggle_btn = QToolButton()
+        self._params_toggle_btn.setObjectName("DockToggle")
+        self._params_toggle_btn.setAutoRaise(True)
+        self._params_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._params_toggle_btn.setIconSize(QSize(scaled(14), scaled(14)))
+        self._params_toggle_btn.setFixedSize(scaled(20), scaled(20))
+        self._params_toggle_btn.clicked.connect(self._on_toggle_params)
+
+        step_panel = dock.add_docker("步骤参数", scroll, icon_kind="palette", stretch=3)
+        step_panel.set_icon("palette")
+        step_panel.add_header_widget(self._params_toggle_btn)
+
+        # ---- 日志（可折叠；运行时看进度，平时收起来给参数让位） ----
+        log_box = QWidget()
+        log_layout = QVBoxLayout(log_box)
+        log_layout.setContentsMargins(0, 0, 0, 0)
+        log_layout.setSpacing(4)
+        log_header = QHBoxLayout()
+        self._log_toggle_btn = QToolButton()
+        self._log_toggle_btn.setText("▾")
+        self._log_toggle_btn.setFixedSize(20, 20)
+        T(self._log_toggle_btn, "收起/展开日志", attr="tooltip")
+        self._log_toggle_btn.clicked.connect(self._on_toggle_log)
+        log_header.addWidget(self._log_toggle_btn)
+        log_header.addStretch(1)
+        clear_btn = T(QPushButton(), "清空")
+        T(clear_btn, "清空日志", attr="tooltip")
+        clear_btn.clicked.connect(lambda: self._log_view.clear())
+        log_header.addWidget(clear_btn)
+        log_layout.addLayout(log_header)
+        self._log_view = QPlainTextEdit()
+        self._log_view.setObjectName("LogView")
+        self._log_view.setReadOnly(True)
+        self._log_view.setMinimumHeight(scaled(90))
+        self._log_collapsed = False
+        log_layout.addWidget(self._log_view, 1)
+        log_panel = dock.add_docker("日志", log_box, icon_kind="console", stretch=2)
+        log_panel.set_icon("console")
+
+        # 默认展开（旧版默认收起，进 IDE 什么都看不到，是主要的「反人类」来源）
+        self._params_collapsed = False
         self._apply_params_collapsed()
         return dock
 
@@ -535,7 +631,7 @@ class IdePage(QWidget):
         self._loop_chk = T(QCheckBox(), "首尾帧一致（循环闭合）")
         self._loop_chk.setChecked(True)
         f.addRow(self._loop_chk)
-        tip = T(QLabel(), "参考图将作为首帧图传入视频 API；背景强制纯色等选项在「背景」步骤")
+        tip = T(QLabel(), "动画生成用左栏「首帧图」那张图送入视频 API；没设首帧时会自动用帧序列第 1 帧")
         tip.setObjectName("HintLabel")
         tip.setWordWrap(True)
         f.addRow("", tip)
@@ -656,6 +752,10 @@ class IdePage(QWidget):
     def _sync_session(self) -> None:
         """把表单参数写回 session（运行步骤前调用）。"""
         s = self._session
+        # 帧列表为空时编辑器里显示的可能是首帧图：先把它同步回去，
+        # 否则用户改了首帧、动画步骤却用旧图（旧版的实际 bug）
+        if self._editing_first_frame and not s.frames and hasattr(self, "_editor"):
+            s.first_frame = self._editor.frame().copy()
         s.description = self._desc_edit.toPlainText().strip()
         s.action = self._action_combo.currentData() or self._action_combo.currentText().strip()
         s.aspect_ratio = self._aspect_combo.currentText()
@@ -713,6 +813,7 @@ class IdePage(QWidget):
         self._refresh_editor()
         self._refresh_timeline()
         self._ref_box.set_image(self._session.reference_image)
+        self._refresh_first_frame_row()
         self._update_play_button()
         self._update_status()
 
@@ -728,15 +829,42 @@ class IdePage(QWidget):
     def _refresh_editor(self) -> None:
         frames = self._session.frames
         if frames and 0 <= self._current < len(frames):
+            self._editing_first_frame = False
             self._editor.set_frame(frames[self._current])
             prev = frames[self._current - 1] if self._current > 0 else None
             nxt = frames[self._current + 1] if self._current < len(frames) - 1 else None
             self._editor.set_onion(prev, nxt)
             self._editor_hint.setText(tr("正在编辑帧 {cur}/{total}").format(cur=self._current + 1, total=len(frames)))
+        elif self._session.first_frame is not None:
+            # 还没有帧序列时，编辑器直接编辑首帧图（旧版这里是空白画布，用户以为图片丢了）
+            self._editing_first_frame = True
+            self._editor.set_frame(self._session.first_frame)
+            self._editor.set_onion(None, None)
+            self._editor_hint.setText(
+                tr("正在编辑首帧图（改完点「+ 当前图」即可加入帧序列，或直接走「动画生成」）")
+            )
         else:
+            self._editing_first_frame = False
             self._editor.set_frame(Image.new("RGBA", self._session.target_size(), (0, 0, 0, 0)))
             self._editor.set_onion(None, None)
             self._editor_hint.setText(tr("暂无帧，先生成动画或添加空白帧"))
+
+    def _refresh_first_frame_row(self) -> None:
+        """刷新「首帧图」缩略图/说明与「用当前帧作为首帧」按钮状态。"""
+        first = self._session.first_frame
+        if first is not None:
+            self._first_frame_thumb.setPixmap(_pil_to_qpixmap(first).scaled(
+                scaled(44), scaled(44),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            ))
+            self._first_frame_label.setText(
+                tr("首帧图：{0}×{1}（动画生成将用它）").format(first.width, first.height)
+            )
+        else:
+            self._first_frame_thumb.clear()
+            self._first_frame_label.setText(tr("首帧图：未设置（生成首帧图片，或用当前帧作为首帧）"))
+        self._btn_first_from_current.setEnabled(bool(self._session.frames))
 
     def _refresh_timeline(self) -> None:
         self._timeline.set_frames(self._session.frames, select=self._current)
@@ -771,8 +899,20 @@ class IdePage(QWidget):
                 )
             )
         else:
-            self._status_label.setText(tr("就绪 · {w}×{h}").format(w=size[0], h=size[1]))
-        self._dirty_label.setText(tr("● 未保存") if self._dirty else "")
+            # 没有帧序列时说明当前「手上有什么」，避免用户以为图片丢了
+            if s.first_frame is not None:
+                hint = tr("首帧图 {w}×{h}").format(w=s.first_frame.width, h=s.first_frame.height)
+            elif s.reference_image is not None:
+                hint = tr("仅有参考图")
+            else:
+                hint = tr("就绪")
+            self._status_label.setText(f"{hint} · {size[0]}×{size[1]}")
+        next_hint = ""
+        if self._current_step + 1 < len(STEP_ACTIONS_ZH):
+            next_hint = tr("下一步：{0}").format(tr(STEP_ACTIONS_ZH[self._current_step + 1]))
+        self._dirty_label.setText(
+            (tr("● 未保存") if self._dirty else "") + (f"　{next_hint}" if next_hint else "")
+        )
 
     def _mark_dirty(self) -> None:
         self._dirty = True
@@ -782,12 +922,32 @@ class IdePage(QWidget):
     # 步骤执行
     # ------------------------------------------------------------------ #
     def set_current_step(self, row: int) -> None:
-        """设置当前步骤（主窗口侧栏调用），切换执行按钮文案与右侧分步参数面板。"""
+        """设置当前步骤（主窗口侧栏 / 页面步骤条调用），同步按钮文案与分步参数。"""
         if 0 <= row < len(STEP_ACTIONS_ZH):
             self._current_step = row
             self._btn_run.setText(tr(STEP_ACTIONS_ZH[row]))
+            if hasattr(self, "_btn_run_top"):
+                self._btn_run_top.setText(tr(STEP_ACTIONS_ZH[row]))
+            if hasattr(self, "_step_bar"):
+                self._step_bar.set_current(row)
             self._step_params.setCurrentIndex(row)
+            self._update_status()
             self.step_changed.emit(row)
+
+    def _mark_step_done(self, step: int) -> None:
+        """把步骤标注为已完成（步骤条打勾），并在状态行提示下一步。"""
+        self._step_done.add(int(step))
+        if hasattr(self, "_step_bar"):
+            self._step_bar.mark_done(step)
+        if step + 1 < len(STEP_ACTIONS_ZH):
+            self._log(tr("下一步：{0}").format(tr(STEP_ACTIONS_ZH[step + 1])), "info")
+        self._update_status()
+
+    def _reset_steps_done(self) -> None:
+        self._step_done.clear()
+        if hasattr(self, "_step_bar"):
+            self._step_bar.clear_done()
+
     def _on_run_step(self) -> None:
         self._sync_session()
         step = self._current_step
@@ -846,6 +1006,7 @@ class IdePage(QWidget):
     def _on_step_success(self, step: int, result) -> None:
         self._set_busy(False)
         self._mark_dirty()
+        self._mark_step_done(step)
         if step == 0:
             self._load_prompts_to_form()
             self._tabs.setCurrentIndex(2)
@@ -878,6 +1039,8 @@ class IdePage(QWidget):
 
     def _set_busy(self, busy: bool) -> None:
         self._btn_run.setEnabled(not busy)
+        if hasattr(self, "_btn_run_top"):
+            self._btn_run_top.setEnabled(not busy)
         self._btn_new.setEnabled(not busy)
         self._btn_open.setEnabled(not busy)
         self._btn_save.setEnabled(not busy)
@@ -902,6 +1065,12 @@ class IdePage(QWidget):
             self._mark_dirty()
             if not self._playing:
                 self._refresh_preview()
+        elif self._editing_first_frame:
+            # 帧列表还空着时编辑器编辑的是首帧图：写回首帧，动画步骤才会用上改后的图
+            self._session.first_frame = self._editor.frame().copy()
+            self._mark_dirty()
+            self._refresh_preview()
+            self._refresh_first_frame_row()
 
     def _on_insert_frame(self) -> None:
         if not self._session.frames:
@@ -937,6 +1106,52 @@ class IdePage(QWidget):
         self._current = len(self._session.frames) - 1
         self._mark_dirty()
         self._refresh_all()
+
+    def _current_source_image(self):
+        """「当前图」：优先时间轴选中帧，其次首帧图，再其次参考图。"""
+        s = self._session
+        if s.frames:
+            idx = max(0, min(self._current, len(s.frames) - 1))
+            return s.frames[idx], tr("当前帧")
+        if s.first_frame is not None:
+            return s.first_frame, tr("首帧图")
+        if s.reference_image is not None:
+            return s.reference_image, tr("参考图")
+        return None, ""
+
+    def _on_add_current_frame(self) -> None:
+        """把「当前图」追加到帧列表（生图完成后想把它变成第 1 帧，就点这里）。
+
+        旧版只有「+ 空白帧」，生成完首帧图后没有任何入口把它放进帧列表，
+        这正是「完成生图后无法添加到序列帧列表」的原因。
+        """
+        img, source = self._current_source_image()
+        if img is None:
+            self._on_add_frame()
+            self._log(tr("暂无图片可添加（先生成首帧图片 / 导入图片 / 添加空白帧）"), "warn")
+            return
+        frame = img.convert("RGBA").copy()
+        if self._session.frames:
+            # 尺寸与既有帧对齐，避免混入不同画布尺寸
+            base = self._session.frames[0].size
+            if frame.size != base:
+                frame = frame.resize(base, Image.Resampling.NEAREST)
+        self._session.frames.append(frame)
+        self._current = len(self._session.frames) - 1
+        self._mark_dirty()
+        self._refresh_all()
+        self._log(tr("已把{0}添加为第 {1} 帧").format(source, len(self._session.frames)), "info")
+
+    def _set_first_frame_from_current(self) -> None:
+        """把时间轴当前选中的帧设为动画生成的首帧图。"""
+        if not self._session.frames:
+            return
+        idx = max(0, min(self._current, len(self._session.frames) - 1))
+        self._session.first_frame = self._session.frames[idx].convert("RGBA").copy()
+        self._editing_first_frame = False
+        self._mark_dirty()
+        self._refresh_all()
+        self._log(tr("已把第 {0} 帧设为动画生成的首帧图").format(idx + 1), "info")
 
     def _on_reordered(self, order: List[int]) -> None:
         if len(order) != len(self._session.frames):
@@ -980,6 +1195,8 @@ class IdePage(QWidget):
         self._current = 0
         self._play_index = 0
         self._dirty = False
+        self._editing_first_frame = False
+        self._reset_steps_done()
         self._stop_play()
         self._refresh_all()
         self._log(tr("已新建工作区"), "info")
@@ -993,6 +1210,15 @@ class IdePage(QWidget):
             self._current = 0
             self._play_index = 0
             self._dirty = False
+            self._editing_first_frame = False
+            # 按已恢复的产物推断步骤进度，打开项目后步骤条不该是空的
+            self._reset_steps_done()
+            if self._session.prompts:
+                self._mark_step_done(0)
+            if self._session.first_frame is not None:
+                self._mark_step_done(1)
+            if self._session.frames:
+                self._mark_step_done(2)
             self._load_session_to_form()
             self._refresh_all()
             self._log(tr("已打开项目：{0}").format(path), "info")
@@ -1034,6 +1260,7 @@ class IdePage(QWidget):
             self._session.reference_image = None
             self._log(tr("已移除参考图"), "info")
         self._refresh_preview()
+        self._refresh_first_frame_row()
         self._mark_dirty()
 
     # ------------------------------------------------------------------ #
@@ -1166,6 +1393,14 @@ class IdePage(QWidget):
     # ------------------------------------------------------------------ #
     def retranslate_ui(self) -> None:
         populate_action_combo(self._action_combo)
+        # 步骤条（✓/▶ 记号 + 步骤文案）与主执行按钮随语言重刷
+        bar = getattr(self, "_step_bar", None)
+        if bar is not None:
+            bar.retranslate_ui()
+        if hasattr(self, "_btn_run_top"):
+            self._btn_run_top.setText(tr(STEP_ACTIONS_ZH[max(0, min(self._current_step, len(STEP_ACTIONS_ZH) - 1))]))
+        if hasattr(self, "_first_frame_label"):
+            self._refresh_first_frame_row()
         # 编辑器里的动态提示（色族色块、对称/环绕开关）也要跟着换语言
         editor = getattr(self, "_editor", None)
         if editor is not None and hasattr(editor, "retranslate_ui"):

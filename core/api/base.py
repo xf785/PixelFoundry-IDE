@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -68,6 +69,8 @@ class BaseAPI(ABC):
         self._verify_ssl = verify not in (False, 0, "0", "false", "False", "")
         self._transport = transport
         self._client: Optional[httpx.Client] = None
+        # 最近一次失败请求的响应元信息 {status_code, text, url, method}（供探测/诊断展示）
+        self.last_error_response: Optional[dict] = None
 
     # ------------------------------------------------------------------ #
     # HTTP 基础设施
@@ -96,15 +99,20 @@ class BaseAPI(ABC):
         例如 {"model": "$model", "messages": [{"role": "user", "content": "$prompt"}]}。
         values 为 {占位符名: 值}；值按 str() 替换（None/False -> "None"/"False"，因此
         布尔等需先转成字符串如 "true"）。模板非法 JSON 时返回 None。
+
+        占位符按「标识符边界」匹配：$image 不会误伤 $image_url / $image_raw
+        （它们更长，必须整体替换）；长名优先替换，避免被短名抢先吃掉。
         """
         text = str(template)
-        for key, value in values.items():
+        for key in sorted((k for k in values if k), key=len, reverse=True):
+            value = values[key]
             if value is None:
                 continue
             if isinstance(value, bool):
-                text = text.replace("$" + key, "true" if value else "false")
+                replacement = "true" if value else "false"
             else:
-                text = text.replace("$" + key, str(value))
+                replacement = str(value)
+            text = re.sub(r"\$" + re.escape(str(key)) + r"(?![0-9A-Za-z_])", lambda _m, r=replacement: r, text)
         try:
             data = json.loads(text)
         except (ValueError, TypeError):
@@ -121,11 +129,65 @@ class BaseAPI(ABC):
     def custom_method(self) -> str:
         return str(self.params.get("request_method") or "POST").upper()
 
+    # ------------------------------------------------------------------ #
+    # 鉴权方式（中转站/聚合站的鉴权差异很大，统一在这里适配）
+    # ------------------------------------------------------------------ #
+    def auth_style(self) -> str:
+        """当前鉴权方式（params.auth_style）。
+
+        取值：bearer（默认，Authorization: Bearer <key>）/ x-api-key / api-key /
+        query（追加到 URL 查询参数）/ custom（自定义请求头名与前缀）/ none（不鉴权）。
+        未配置时返回 bearer，保持旧配置行为完全不变。
+        """
+        return str(self.params.get("auth_style") or "bearer").strip().lower()
+
+    def _auth_header_pair(self) -> Optional[tuple]:
+        """按鉴权方式返回 (头名, 头值)；无需请求头时返回 None。"""
+        if not self.api_key:
+            return None
+        style = self.auth_style()
+        if style == "bearer":
+            return ("Authorization", f"Bearer {self.api_key}")
+        if style == "x-api-key":
+            return ("X-API-Key", self.api_key)
+        if style == "api-key":
+            return ("api-key", self.api_key)
+        if style == "custom":
+            name = str(self.params.get("auth_header") or "").strip() or "Authorization"
+            prefix = str(self.params.get("auth_prefix") or "")
+            return (name, f"{prefix}{self.api_key}")
+        # query / none：不产生请求头（query 由 auth_url 拼到 URL 上）
+        return None
+
+    def auth_url(self, url: str) -> str:
+        """按鉴权方式加工请求 URL。
+
+        只有 auth_style=query 时才把 Key 作为查询参数追加（参数名取
+        params.auth_query_param，默认 key），其余方式原样返回。
+        所有请求路径（含视频提交/轮询、图片、文本、模型列表）都必须经过本方法。
+        """
+        if not self.api_key or self.auth_style() != "query":
+            return url
+        name = str(self.params.get("auth_query_param") or "").strip() or "key"
+        try:
+            from urllib.parse import quote, urlsplit, urlunsplit
+
+            parts = urlsplit(url)
+            query = parts.query
+            piece = f"{quote(name, safe='')}={quote(self.api_key, safe='')}"
+            query = f"{query}&{piece}" if query else piece
+            return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+        except Exception:  # noqa: BLE001  理论上不会发生，兜底不阻断请求
+            joiner = "&" if "?" in url else "?"
+            return f"{url}{joiner}{name}={self.api_key}"
+
     def _headers(self) -> dict:
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        pair = self._auth_header_pair()
+        if pair is not None:
+            headers[pair[0]] = pair[1]
         # 完全自定义：额外请求头（JSON，如 {"X-API-Key": "…", "Authorization": "…"}）
+        # 额外请求头最后写入，可覆盖鉴权方式生成的任何头（含 Authorization）。
         extra = self.params.get("extra_headers")
         if extra:
             if isinstance(extra, str):
@@ -173,12 +235,17 @@ class BaseAPI(ABC):
     def _request(self, method: str, url: str, multipart: bool = False, **kwargs) -> httpx.Response:
         """带重试的 HTTP 请求；失败抛 APIError。
 
+        URL 会先经过 auth_url() 加工（鉴权方式为 query 时追加 Key 查询参数），
+        因此调用方无需关心鉴权方式；错误信息里带加工后的完整 URL 便于排查。
+
         multipart=True 时发送 multipart/form-data（用于图片文件上传类服务商），
         此时不设置 Content-Type（由 httpx 自动生成带 boundary 的头）。
         """
+        url = self.auth_url(url)
         retries = max(0, self.max_retries)
         backoff = [0.5, 1.5, 3.0]
         last_exc: Optional[Exception] = None
+        self.last_error_response = None
         headers = self._headers()
         if multipart:
             headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
@@ -193,11 +260,22 @@ class BaseAPI(ABC):
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
                 body = exc.response.text[:500]
+                # 保留原始响应（诊断/探测用：4xx 直接抛出前也要留档）
+                self.last_error_response = {
+                    "status_code": status,
+                    "text": exc.response.text,
+                    "url": url,
+                    "method": method,
+                }
                 # 429/5xx 可重试，其余直接抛出（错误信息带完整 URL 便于排查）
                 if status in (408, 429) or status >= 500:
                     last_exc = exc
                 else:
-                    raise APIError(f"HTTP {status} ({method} {url}): {body}") from exc
+                    raise APIError(
+                        self._friendly_error(
+                            f"HTTP {status} ({method} {url}): {body}", status=status
+                        )
+                    ) from exc
             if attempt < retries:
                 wait = backoff[min(attempt, len(backoff) - 1)]
                 logger.info("重试 %s %s（第 %d 次，等待 %.1fs）", method, url, attempt + 1, wait)
@@ -208,11 +286,18 @@ class BaseAPI(ABC):
         """把最终异常转为可读信息（含响应体/排查建议）。"""
         if isinstance(exc, httpx.HTTPStatusError):
             body = exc.response.text[:500]
-            return f"HTTP {exc.response.status_code}: {body}"
+            return self._friendly_error(
+                f"HTTP {exc.response.status_code}: {body}", status=exc.response.status_code
+            )
         return self._friendly_error(exc)
 
     def _post_json(self, url: str, payload: dict) -> dict:
         resp = self._request("POST", url, json=payload)
+        return self._parse_json(resp)
+
+    def _put_json(self, url: str, payload: dict) -> dict:
+        """PUT + JSON 请求体（部分中转站的提交接口用 PUT）。"""
+        resp = self._request("PUT", url, json=payload)
         return self._parse_json(resp)
 
     def _post_multipart(self, url: str, data: dict, files: dict) -> dict:
@@ -297,8 +382,11 @@ class BaseAPI(ABC):
             return APIResult(ok=False, error=f"响应中没有模型列表: {str(data)[:200]}", raw=data)
         return APIResult(ok=False, error=last_err)
 
-    def _friendly_error(self, exc: Exception) -> str:
+    def _friendly_error(self, exc: Exception, status: Optional[int] = None) -> str:
         """把底层异常转为带排查建议的提示。
+
+        exc 可以是异常对象，也可以是已经拼好的错误文本（带 HTTP 状态码时
+        请用 status 传进来，便于追加 401/403 的鉴权排查建议）。
 
         404 + "Invalid URL" 通常有两种原因：
         - 多数 OpenAI 兼容服务：Base URL 缺少路径前缀（如 /v1），
@@ -307,8 +395,24 @@ class BaseAPI(ABC):
           加 /v1 也无济于事——应使用「gpt.ge (V-API) 豆包视频」适配
           （端点 /task/volces/seedance）。
         SSL 握手失败通常是网络被拦截或需要代理。
+        401/403 多为鉴权方式不匹配（中转站常见 X-API-Key / api-key / 查询参数）。
         """
         msg = str(exc)
+        if status is None:
+            match = re.match(r"\s*(?:HTTP\s*)?(4\d\d|5\d\d)\b", msg)
+            if match:
+                status = int(match.group(1))
+        if status is None and "401" in msg[:80]:
+            status = 401
+        if status is None and "403" in msg[:80]:
+            status = 403
+        if status in (401, 403) and "鉴权方式" not in msg:
+            msg += (
+                "（提示：401/403 多为鉴权方式不匹配——中转站/聚合站常用 X-API-Key、"
+                "api-key 或 URL 查询参数，而非 Authorization: Bearer。"
+                "请在高级项「鉴权方式」中改选对应方式，或选「自定义请求头」填正确的"
+                "头名/前缀；也可用「额外请求头」直接覆盖，例如 {\"X-API-Key\": \"你的Key\"}）"
+            )
         if "Invalid URL" in msg and "/v1" not in msg:
             if self.KIND == "video" and "gpt.ge" in self.base_url:
                 msg += (
