@@ -3,6 +3,9 @@ name = "PixelFoundry"
 version = "1.1.0"
 description = "像素铸造 IDE —— 从文本描述到像素铸造的一站式桌面工具"
 requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+# 商用/闭源授权联系：1358272190@qq.com（详见 LICENSE 的附加条款）
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

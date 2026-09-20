@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/xf785/PixelFoundry-IDE/actions/workflows/ci.yml/badge.svg)](https://github.com/xf785/PixelFoundry-IDE/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/xf785/PixelFoundry-IDE/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 
@@ -41,7 +41,10 @@
   提交与轮询端点/方法/请求体模板全可配、**粘贴浏览器「Copy as cURL」一键导入**、
   **「一键适配端点…」**（自动探测中转站支持的提交端点并填好提交/轮询地址，只发无害 GET、需手动才发 POST）、
   **「预览请求」+「测试并检测字段」**自动识别任务 ID / 状态 / 视频 URL 的字段路径（详见 [API 配置指南](docs/api_setup.md)）。
-- 📦 **开源**——MIT 协议、GitHub Actions CI（Win + Linux）、PyInstaller 发布 Windows 版。
+- 📦 **源码公开（AGPL-3.0）**——个人、学习、自用完全免费；**允许商用**，但分发修改版或用它对外提供网络服务时，
+  必须同样以 AGPL-3.0 公开你的完整源码；**想闭源商用（闭源集成 / 闭源 SaaS）需另行取得商业授权**。
+  同时要求保留版权与项目名，不得改名冒充原创 —— 详见 [LICENSE](LICENSE) 末尾的附加条款。
+  GitHub Actions CI（Win + Linux）、PyInstaller 发布 Windows 版。
 
 ## 🚀 快速开始
 
@@ -302,5 +305,19 @@ M1–M9 里程碑（历史规划原文保留，新增方向单列一节）。
 - 运行期配置与密钥存放在用户数据目录（Windows: `%APPDATA%\PixelFoundry\`）。
 - 生图/视频 API 因服务商差异较大，视频 API 支持通过配置项适配（端点、轮询、状态字段等），详见 `core/api/video_api.py`。
 - 用户素材与生成结果默认全部保存在本地。
-- **开源/商用合规**：导航图标来自 DeepSeek Harness（MIT License, Copyright (c) 2026 DeepSeek），使用须保留版权声明，详见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。本项目与 DeepSeek 无隶属关系。
-- 遵循 [MIT License](LICENSE)。Copyright (c) 2026 StrFaith。
+- **本项目许可**：[GNU AGPL-3.0](LICENSE)（含第 7 条附加条款）。Copyright (c) 2026 StrFaith。
+  - ✅ **可以**：个人/学习/研究/自用、公司内部使用、商业项目使用、修改源码、二次分发。
+  - ⚠️ **条件**：一旦你**分发修改版**或**把它作为网络服务对外提供**，必须以 AGPL-3.0 公开你修改后的完整源码
+    （含通过网络提供服务的场景）；同时保留版权声明与项目名。
+  - ❌ **不可以**：去掉版权/改名后当作自己的原创产品发布、售卖；
+    把修改版**闭源**集成进商业产品或做成闭源 SaaS（这类需要**商业授权**）。
+  - 💬 **商业授权 / 闭源商用**：请联系 **1358272190@qq.com**（说明用途、分发方式与规模）。
+  - 📌 **版本边界**：v0.1.0 – v1.1.0 按 MIT 协议发布，已获得这些版本副本的人仍适用 MIT；
+    AGPL-3.0 自 2026-09-20 起的版本生效。
+  - 📦 **协议随包分发**：发布 zip 内已包含 `LICENSE`、`THIRD_PARTY_NOTICES.md` 与两份 README
+    （在解压目录的 `_internal/` 下），再分发时请一并保留。
+- **第三方组件合规**：导航图标来自 DeepSeek Harness（MIT License, Copyright (c) 2026 DeepSeek），
+  其 MIT 许可与版权声明必须保留，详见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+  运行时依赖 PySide6（LGPL-3.0）、Pillow、numpy、httpx、cryptography、imageio(-ffmpeg) 等，
+  各自按其原许可使用。本项目与 DeepSeek 无隶属关系。
+- 以上为项目方的许可声明，不构成法律意见；商用前建议咨询律师。

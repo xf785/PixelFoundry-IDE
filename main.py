@@ -4,7 +4,11 @@
     python main.py                     # 启动 GUI（缺依赖时自动改用 .venv）
     python main.py --demo              # 无 GUI 演示：模拟 API 跑通 Solo 全流程
     python main.py --demo --desc "..." --output demo_output
+
+许可：AGPL-3.0（含第 7 条附加条款），Copyright (C) 2026 StrFaith —— 详见 LICENSE。
 """
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 StrFaith
 from __future__ import annotations
 
 import argparse

@@ -230,8 +230,12 @@ LANG_PACKS: dict = {
         '如 {"resolution":"1080p","watermark":false}': 'e.g. {"resolution":"1080p","watermark":false}',
         "从文本到像素资产的一站式桌面工作台：文生图 → 动画 → 严格像素化 → 抠图 → GIF / APNG / 序列帧 / 雪碧图。":
             "A one-stop desktop workbench from text to pixel assets: text-to-image → animation → strict pixelization → keying → GIF / APNG / frames / sprite sheets.",
-        "界面参考 Krita 的停靠面板与工作区布局；MIT 许可，开源免费。":
-            "The interface follows Krita's docker and workspace layout; MIT licensed, free and open source.",
+        "界面参考 Krita 的停靠面板与工作区布局。":
+            "The interface follows Krita's docker and workspace layout.",
+        "许可 AGPL-3.0：可自由使用与商用，但分发修改版或提供网络服务时须以同样协议公开源码；想闭源商用需另行授权。":
+            "Licence AGPL-3.0: free to use and to use commercially, but if you distribute a modified version or run it as a network service you must publish the source under the same licence; a separate licence is required for closed-source commercial use.",
+        "请保留版权与项目名，不得改名冒充原创（详见 LICENSE 附加条款）。":
+            "Keep the copyright and project name — do not rename it and pass it off as your own (see the additional terms in LICENSE).",
         "IDE 分步工作区": "IDE step workspace",
         "Solo 一键生成": "Solo one-click",
         "独立像素画布": "Standalone pixel canvas",

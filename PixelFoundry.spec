@@ -1,7 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('assets', 'assets'), ('ui/styles', 'ui/styles')]
+# 许可与声明必须随二进制一起分发（AGPL-3.0 §4/§5：向接收者提供协议副本；
+# 第三方组件声明同理），否则拿到 zip 的人看不到许可条款。
+datas = [
+    ('assets', 'assets'),
+    ('ui/styles', 'ui/styles'),
+    ('LICENSE', '.'),
+    ('THIRD_PARTY_NOTICES.md', '.'),
+    ('README.md', '.'),
+    ('README_CN.md', '.'),
+]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('imageio_ffmpeg')

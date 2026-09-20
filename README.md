@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/xf785/PixelFoundry-IDE/actions/workflows/ci.yml/badge.svg)](https://github.com/xf785/PixelFoundry-IDE/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/xf785/PixelFoundry-IDE/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 
@@ -39,7 +39,11 @@ middle, results and log on the right.</em></p>
 - 🖼️ **Standalone pixel board** — 4th mode with resolution settings, two-way IDE sync, and video-first-frame handoff (NEAREST upscale, never blurry); Krita-style resizable docks plus a **tile/prop pack browser** that browses **every folder level** inside a pack (atlases, individual tiles, textures, raw sheets), with category switcher, search, thumbnails, place/replace on canvas and auto-restore |
 - 🌐 **Bilingual + scalable UI** — Chinese / English, UI scale 0.8×–1.5×, self-drawn DSH-style icons.
 - 🔌 **Provider-agnostic & relay-friendly** — one-click presets for DeepSeek, Kimi, Zhipu, SiliconFlow, Ark, DashScope, Hunyuan, Ollama, gpt.ge, Kling… plus proxy & SSL options. The **video API is fully configurable**: six auth styles (Bearer / X-API-Key / api-key / query param / custom header / none), configurable submit & poll endpoints, methods and body templates, **paste “Copy as cURL” to import a whole config**, **One-click endpoint adapt** (probes which submit endpoint your relay actually serves and fills in the submit/poll URLs — harmless GETs only, POST probing is manual), and **Preview request / Test & detect fields** to auto-discover the task-id, status and video-URL paths (see the [API setup guide](docs/api_setup.md)).
-- 📦 **Open source** — MIT license, CI on GitHub Actions (Win + Linux), Windows releases via PyInstaller.
+- 📦 **Source-available (AGPL-3.0)** — free for personal, educational and internal use; **commercial use is allowed**, but
+  if you distribute a modified version or run it as a network service you must publish your complete source under
+  AGPL-3.0; **closed-source commercial use (closed integration / closed SaaS) needs a separate commercial licence**.
+  The copyright notice and project name must be kept — no renaming it into your own product (see the additional terms at
+  the end of [LICENSE](LICENSE)). CI on GitHub Actions (Win + Linux); Windows builds via PyInstaller.
 
 ## 🚀 Quick Start
 
@@ -308,5 +312,19 @@ milestones M1–M9 (the original planning is kept verbatim; new directions live 
 - Runtime config & keys live in the user data dir (Windows: `%APPDATA%\PixelFoundry\`).
 - Video providers differ; adapt via config (endpoints, polling, status fields) — see `core/api/video_api.py`.
 - User assets and outputs are stored locally by default.
-- **Open-source / commercial compliance**: nav icons come from DeepSeek Harness (MIT License, Copyright (c) 2026 DeepSeek) — keep the attribution, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). This project is not affiliated with DeepSeek.
-- Licensed under the [MIT License](LICENSE). Copyright (c) 2026 StrFaith.
+- **This project is licensed under the [GNU AGPL-3.0](LICENSE)** (with additional terms under §7). Copyright (c) 2026 StrFaith.
+  - ✅ **You may**: use it personally, study it, use it at work, use it in commercial projects, modify it, redistribute it.
+  - ⚠️ **You must**: if you **distribute a modified version** or **run it as a network service**, publish your complete
+    modified source under AGPL-3.0 (the network case is covered too), and keep the copyright notice and project name.
+  - ❌ **You may not**: strip the copyright, rename it and pass it off as your own product; or ship a modified version
+    **closed-source** inside a commercial product or as a closed SaaS (a **commercial licence** is required for that).
+  - 💬 **Commercial / closed-source licensing**: contact **1358272190@qq.com** (state the intended use, distribution and scale).
+  - 📌 **Version boundary**: v0.1.0 – v1.1.0 were released under MIT; anyone who obtained those copies keeps MIT for them.
+    AGPL-3.0 applies to versions from 2026-09-20 onwards.
+  - 📦 **The licence travels with the download**: the release zip ships `LICENSE`, `THIRD_PARTY_NOTICES.md` and both
+    READMEs (under `_internal/` in the extracted folder) — keep them when you redistribute.
+- **Third-party compliance**: nav icons come from DeepSeek Harness (MIT License, Copyright (c) 2026 DeepSeek) — their MIT
+  licence and attribution must be kept, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Runtime dependencies include
+  PySide6 (LGPL-3.0), Pillow, numpy, httpx, cryptography, imageio(-ffmpeg), each used under its own licence. This project is
+  not affiliated with DeepSeek.
+- The above is the project's licence statement, not legal advice; consult a lawyer before commercial use.
