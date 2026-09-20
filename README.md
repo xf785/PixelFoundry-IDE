@@ -262,14 +262,32 @@ Covers: pixelization, background removal, frame utils (real mp4 extraction), key
 
 ## 🗺️ Roadmap
 
-Phase 1–4 shipped (MVP / IDE / sprite workflow / standalone pixel board / i18n / CI / release **v0.1.0**). Up next:
+**v1.0.0 shipped**: MVP / IDE step workspace / sprite workflow / standalone pixel board / tilemap mode (Phase A) /
+Krita-style shell / zh-en i18n / CI (green on all four platform-Python combos) / Windows packaging & release.
 
-- **Map tiles & tile-map editor** (tileset generation + a 5th tile-map mode)
-- **Solo performance & quality** (caching, multi-candidate generation, quality baselines)
-- **Pixel editor & sprite refinements** (more tools, real layer stack, in-page sprite editing)
-- **Continuous polish** (packaging, auto-update, docs, community)
+Up next (Phases E–I, milestones M6–M9):
 
-See [**ROADMAP.md**](ROADMAP.md) (English) / [**ROADMAP_CN.md**](ROADMAP_CN.md) (中文) for milestones M1–M4.
+- **Strict isometric (rhombus) tilemaps** — a real 2:1 isometric system: rhombus geometry and mask family,
+  ramps/stairs, multi-level plateau cliffs, an isometric preview editor, isometric export (Tiled `isometric` /
+  Godot `TileSet`).
+- **Image-to-video → sequence-frame refinement** — content-aware extraction with keyframe protection, per-frame
+  stabilisation and background "boiling" suppression, loop closure with variable-duration pacing, per-frame colour
+  consistency plus **grid-drift detection**, and a metrics panel that says what to change.
+- **Skeleton + vector sequence frames** — rig a single source image with bones and mesh weights and bake animation
+  frames through **pixel-faithful deformation** (integer displacement + nearest neighbour + palette constraints),
+  with no video API involved; preset motion library, skin swapping and Spine/DragonBones-compatible export.
+- **Style plugins (LoRA-like)** — declarative style plugins (prompt fragments / reference images / palette / native
+  LoRA fields) that degrade gracefully per provider capability, stack with weights, and stay consistent across
+  text-to-image, sprite sheets and tilesets.
+- **Standalone pixel canvas productivity** — a real layer stack with a layers panel, magic wand and selection
+  transforms, stamp/pattern/random-variant brushes, pixel-font text, an in-canvas animation workbench
+  (timeline + onion skin + frame shifting), a command palette with **macro recording**, and batch export.
+
+Still on the older list (Phases B–D): Solo result caching and parallel pixelization, multi-candidate generation and
+quality baselines, Tiled `.tmx/.tsx` interop, map layer stack, 100 % i18n, user manual and community building.
+
+See [**ROADMAP.md**](ROADMAP.md) (English) / [**ROADMAP_CN.md**](ROADMAP_CN.md) (中文) for Phases A–I and
+milestones M1–M9 (the original planning is kept verbatim; new directions live in their own section).
 
 ## 📄 Notes & License
 
