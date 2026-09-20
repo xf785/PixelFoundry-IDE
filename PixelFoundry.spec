@@ -7,6 +7,7 @@ datas = [
     ('assets', 'assets'),
     ('ui/styles', 'ui/styles'),
     ('LICENSE', '.'),
+    ('NOTICE', '.'),
     ('THIRD_PARTY_NOTICES.md', '.'),
     ('README.md', '.'),
     ('README_CN.md', '.'),

@@ -26,12 +26,13 @@
    > 发布前请确认 zip 内**不含** `api_config.json`、`*.keyring`、`ui_settings.json` 等本地运行期文件。
 
 6. **发布前合规检查**（AGPL-3.0 要求随二进制提供协议副本）：
-   - zip 内应包含 `PixelFoundry/_internal/LICENSE`、`THIRD_PARTY_NOTICES.md`、`README.md`、`README_CN.md`
-     —— 由 `PixelFoundry.spec` 的 `datas` 打包，别删；
+   - zip 内应包含 `PixelFoundry/_internal/LICENSE`（逐字 AGPL 正文）、`NOTICE`（版权与附加条款）、
+     `THIRD_PARTY_NOTICES.md`、`README.md`、`README_CN.md` —— 由 `PixelFoundry.spec` 的 `datas` 打包，别删；
+   - 确认 `LICENSE` 未被改动（GitHub 的许可识别依赖逐字正文；附加条款写在 `NOTICE` 里）；
    - 确认 `config/settings.py` 的 `APP_VERSION` 与 tag 一致（窗口标题与「关于」对话框会显示它）；
    - 确认 README 徽章与 `docs/releases/<tag>.md` 的版本号已同步。
 
    ```powershell
    # 快速核对：下载发布件后检查关键文件
-   .\.venv\Scripts\python.exe -c "import zipfile;print([n for n in zipfile.ZipFile('release/PixelFoundry-vX.Y.Z-win64.zip').namelist() if n.endswith(('LICENSE','THIRD_PARTY_NOTICES.md','PixelFoundry.exe'))])"
+   .\.venv\Scripts\python.exe -c "import zipfile;print([n for n in zipfile.ZipFile('release/PixelFoundry-vX.Y.Z-win64.zip').namelist() if n.endswith(('LICENSE','NOTICE','THIRD_PARTY_NOTICES.md','PixelFoundry.exe'))])"
    ```

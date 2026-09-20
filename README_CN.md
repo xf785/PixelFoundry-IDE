@@ -43,7 +43,7 @@
   **「预览请求」+「测试并检测字段」**自动识别任务 ID / 状态 / 视频 URL 的字段路径（详见 [API 配置指南](docs/api_setup.md)）。
 - 📦 **源码公开（AGPL-3.0）**——个人、学习、自用完全免费；**允许商用**，但分发修改版或用它对外提供网络服务时，
   必须同样以 AGPL-3.0 公开你的完整源码；**想闭源商用（闭源集成 / 闭源 SaaS）需另行取得商业授权**。
-  同时要求保留版权与项目名，不得改名冒充原创 —— 详见 [LICENSE](LICENSE) 末尾的附加条款。
+  同时要求保留版权与项目名，不得改名冒充原创 —— 详见 [NOTICE](NOTICE) 的附加条款。
   GitHub Actions CI（Win + Linux）、PyInstaller 发布 Windows 版。
 
 ## 🚀 快速开始
@@ -314,8 +314,8 @@ M1–M9 里程碑（历史规划原文保留，新增方向单列一节）。
   - 💬 **商业授权 / 闭源商用**：请联系 **1358272190@qq.com**（说明用途、分发方式与规模）。
   - 📌 **版本边界**：v0.1.0 – v1.1.0 按 MIT 协议发布，已获得这些版本副本的人仍适用 MIT；
     AGPL-3.0 自 2026-09-20 起的版本生效。
-  - 📦 **协议随包分发**：发布 zip 内已包含 `LICENSE`、`THIRD_PARTY_NOTICES.md` 与两份 README
-    （在解压目录的 `_internal/` 下），再分发时请一并保留。
+  - 📦 **协议随包分发**：发布 zip 内已包含 `LICENSE`（逐字 AGPL 正文）、`NOTICE`（版权与附加条款）、
+    `THIRD_PARTY_NOTICES.md` 与两份 README（在解压目录的 `_internal/` 下），再分发时请一并保留。
 - **第三方组件合规**：导航图标来自 DeepSeek Harness（MIT License, Copyright (c) 2026 DeepSeek），
   其 MIT 许可与版权声明必须保留，详见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
   运行时依赖 PySide6（LGPL-3.0）、Pillow、numpy、httpx、cryptography、imageio(-ffmpeg) 等，

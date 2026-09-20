@@ -1,0 +1,83 @@
+PixelFoundry IDE（像素铸造 IDE）
+Copyright (C) 2026 StrFaith
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+本程序是自由软件：你可以依据自由软件基金会发布的 GNU Affero 通用公共许可证
+（第 3 版或你选择的任何更新版本）重新分发和/或修改它。
+
+本程序分发时希望它有用，但不提供任何担保；甚至不提供适销性或特定用途适用性的
+默示担保。详见 GNU Affero 通用公共许可证。
+
+你应该已经随本程序收到 GNU Affero 通用公共许可证的副本；如果没有，见
+<https://www.gnu.org/licenses/>。
+
+完整的许可正文见同目录的 LICENSE（逐字 GNU AGPL-3.0，未做任何改动）。
+
+版本边界：本仓库自 2026-09-20 起采用 AGPL-3.0（含下方附加条款）；
+此前发布的历史版本（v0.1.0 – v1.1.0）按 MIT 协议发布，已获得那些版本副本的人
+仍可依 MIT 使用它们 —— 协议不可追溯撤回。
+
+-------------------------------------------------------------------------------
+附加条款（依据 AGPL-3.0 第 7 条 "Additional Terms" 添加）
+Additional Terms under Section 7 of the GNU AGPL-3.0
+-------------------------------------------------------------------------------
+
+在保留 AGPL-3.0 全部条款的前提下，依据第 7 条 (b)(c)(d) 项额外要求：
+
+1. 保留版权与作者信息（§7(b)）
+   任何转载、分发、修改版本或衍生作品，都必须完整保留 LICENSE、NOTICE、源代码
+   文件头部的版权声明、作者署名（Copyright (C) 2026 StrFaith）与协议声明，
+   不得删除、遮挡或以自己的名义替换。
+
+2. 不得冒充原创或改名发布（§7(c)）
+   不得把本项目（或其修改版、衍生版）改个名字、换个图标或换套界面后，当作自己的
+   原创产品发布、售卖或推广；修改版必须以显著方式标明「基于 PixelFoundry IDE
+   （像素铸造 IDE）修改」，并注明修改内容与日期。
+
+3. 不得暗示官方背书（§7(d)）
+   未经书面许可，不得使用「PixelFoundry」「PixelFoundry IDE」「像素铸造」等名称、
+   Logo 进行宣传，或以任何方式暗示本项目作者为你的版本背书、担保或合作。
+
+4. 网络服务同样必须开源（AGPL 第 13 条提示，非新增限制）
+   若你修改本程序并通过网络向用户提供服务（例如做成在线生成服务），必须向这些用户
+   提供对应版本的完整源代码。这是 AGPL-3.0 本身的强制要求。
+
+常见使用场景（便于理解，不构成法律意见）：
+
+- 个人学习、研究、自用、非营利项目：自由使用、修改、分发，无需联系作者。
+- 公司内部使用，或把本项目打包进产品/服务对外提供：**允许**，但必须遵守 AGPL-3.0
+  —— 对外分发（含通过网络提供服务）时，以 AGPL-3.0 公开你修改后的完整源代码，
+  并保留上述版权与来源标注。
+- 想闭源商用（把修改版闭源发布、闭源集成进商业产品、闭源 SaaS 等）：AGPL-3.0
+  不允许，需另行取得**商业授权**。联系邮箱：1358272190@qq.com
+  （可直接改成你的常用邮箱），请在邮件中说明用途、分发方式与规模。
+
+上述附加条款与 AGPL-3.0 冲突时，以 AGPL-3.0 为准；这些条款不改变 AGPL-3.0
+授予你的任何权利，只是在你行使这些权利时附加「保留署名 / 标明来源 / 不得暗示
+背书」的要求。
+
+-------------------------------------------------------------------------------
+
+Additional terms (English summary — the Chinese text above is authoritative for
+this project; both are additional terms under AGPL-3.0 §7):
+
+1. Preservation of notices (§7(b)): keep LICENSE, NOTICE, the copyright notice and
+   the attribution (Copyright (C) 2026 StrFaith) intact in any copy,
+   redistribution, modified version or derivative work.
+2. No misrepresentation of origin (§7(c)): you may not rename this project (or a
+   modified version), swap its icon/UI and publish or sell it as your own original
+   product. Modified versions must state prominently that they are "based on
+   PixelFoundry IDE" and note what changed and when.
+3. No implied endorsement (§7(d)): you may not use the names "PixelFoundry",
+   "PixelFoundry IDE" or "像素铸造", or the project logo, to promote your version or
+   imply that the original author endorses, guarantees or partners with it, without
+   written permission.
+4. AGPL §13 reminder: if you run a modified version as a network service, you must
+   offer the corresponding complete source code to your users.
+
+Commercial use is permitted under AGPL-3.0 as long as you comply with it (publish
+your modifications as open source when you distribute or serve them). If you need
+this project inside a closed-source commercial product or service, you need a
+separate commercial licence: 1358272190@qq.com
+
+If any additional term conflicts with AGPL-3.0, AGPL-3.0 prevails.

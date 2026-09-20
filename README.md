@@ -42,8 +42,8 @@ middle, results and log on the right.</em></p>
 - 📦 **Source-available (AGPL-3.0)** — free for personal, educational and internal use; **commercial use is allowed**, but
   if you distribute a modified version or run it as a network service you must publish your complete source under
   AGPL-3.0; **closed-source commercial use (closed integration / closed SaaS) needs a separate commercial licence**.
-  The copyright notice and project name must be kept — no renaming it into your own product (see the additional terms at
-  the end of [LICENSE](LICENSE)). CI on GitHub Actions (Win + Linux); Windows builds via PyInstaller.
+  The copyright notice and project name must be kept — no renaming it into your own product (see the additional terms in
+  [NOTICE](NOTICE)). CI on GitHub Actions (Win + Linux); Windows builds via PyInstaller.
 
 ## 🚀 Quick Start
 
@@ -321,8 +321,9 @@ milestones M1–M9 (the original planning is kept verbatim; new directions live 
   - 💬 **Commercial / closed-source licensing**: contact **1358272190@qq.com** (state the intended use, distribution and scale).
   - 📌 **Version boundary**: v0.1.0 – v1.1.0 were released under MIT; anyone who obtained those copies keeps MIT for them.
     AGPL-3.0 applies to versions from 2026-09-20 onwards.
-  - 📦 **The licence travels with the download**: the release zip ships `LICENSE`, `THIRD_PARTY_NOTICES.md` and both
-    READMEs (under `_internal/` in the extracted folder) — keep them when you redistribute.
+  - 📦 **The licence travels with the download**: the release zip ships `LICENSE` (verbatim AGPL text), `NOTICE`
+    (copyright + additional terms), `THIRD_PARTY_NOTICES.md` and both READMEs (under `_internal/` in the extracted
+    folder) — keep them when you redistribute.
 - **Third-party compliance**: nav icons come from DeepSeek Harness (MIT License, Copyright (c) 2026 DeepSeek) — their MIT
   licence and attribution must be kept, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Runtime dependencies include
   PySide6 (LGPL-3.0), Pillow, numpy, httpx, cryptography, imageio(-ffmpeg), each used under its own licence. This project is
