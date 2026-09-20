@@ -394,6 +394,10 @@ class BaseAPI(ABC):
         - gpt.ge 视频（豆包 Seedance）：不走 /videos/generations 通用路径，
           加 /v1 也无济于事——应使用「gpt.ge (V-API) 豆包视频」适配
           （端点 /task/volces/seedance）。
+        - 视频接口的**端点路径本身**在中转站上不存在：厂商专有路径（如可灵
+          Kling 的 /v1/videos/image2video）只在官方直连有效，中转站通常换成
+          OpenAI 风格 /v1/videos/generations 或方舟风格 contents/generations/tasks
+          ——此时用「一键适配端点…」自动探测，或「从 curl 导入…」贴示例请求。
         SSL 握手失败通常是网络被拦截或需要代理。
         401/403 多为鉴权方式不匹配（中转站常见 X-API-Key / api-key / 查询参数）。
         """
@@ -413,6 +417,7 @@ class BaseAPI(ABC):
                 "请在高级项「鉴权方式」中改选对应方式，或选「自定义请求头」填正确的"
                 "头名/前缀；也可用「额外请求头」直接覆盖，例如 {\"X-API-Key\": \"你的Key\"}）"
             )
+        generic_hint_added = False
         if "Invalid URL" in msg and "/v1" not in msg:
             if self.KIND == "video" and "gpt.ge" in self.base_url:
                 msg += (
@@ -422,6 +427,23 @@ class BaseAPI(ABC):
                 )
             else:
                 msg += "（提示：多为 Base URL 缺少 /v1 等路径前缀所致，请核对服务商要求的完整路径，如 https://api.gpt.ge/v1）"
+            generic_hint_added = True
+        # 视频 404（含端点自带 /v1 的情况，如中转站上的可灵路径）：指向「一键适配端点…」。
+        # 用 "一键适配端点" not in msg 兜底幂等——_request 与 call 都会走一遍本方法。
+        if (
+            self.KIND == "video"
+            and not generic_hint_added
+            and "一键适配端点" not in msg
+            and ("Invalid URL" in msg or status == 404)
+        ):
+            msg += (
+                "（提示：视频的「提交端点」在该服务上可能根本不存在——厂商专有路径"
+                "（如可灵 Kling 的 /v1/videos/image2video）只在官方直连有效，"
+                "经中转站/聚合站转发时路径通常是另一套（如 OpenAI 风格 "
+                "/v1/videos/generations、方舟风格 /contents/generations/tasks）。"
+                "请点「一键适配端点…」自动探测该站真实可用的端点并一键写入配置；"
+                "或用「从 curl 导入…」粘贴服务商文档/浏览器里的示例请求）"
+            )
         if ("SSL" in msg or "TLS" in msg or "EOF" in msg) and "代理" not in msg:
             msg += "（提示：SSL/TLS 握手失败通常是网络被拦截或直连不通。可在 API 配置的高级项「代理」中填写代理地址，如 http://127.0.0.1:7890；或更换网络后重试）"
         return msg

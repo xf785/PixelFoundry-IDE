@@ -25,9 +25,8 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QButtonGroup,
+    QComboBox,
     QFileDialog,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -35,6 +34,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -57,6 +57,7 @@ from core.tilemap.pack import (
     load_pack_handle,
 )
 from ui.i18n import T, tr
+from ui.layout import scaled
 from ui.widgets.dock import Docker, DockerColumn
 
 logger = logging.getLogger("PixelFoundry.ui.pack_browser")
@@ -149,32 +150,37 @@ class PackBrowser(QWidget):
 
         self._pack_list = QListWidget()
         self._pack_list.setObjectName("PackList")
-        self._pack_list.setMaximumHeight(78)
+        # 高度不写死：随面板一起长（旧版 setMaximumHeight(78) 让这块永远只有两行高）
+        self._pack_list.setMinimumHeight(scaled(58))
         T(self._pack_list, "勾选控制显隐；点选切换当前包", attr="tooltip")
         self._pack_list.currentRowChanged.connect(lambda _r: self._refresh())
-        pv.addWidget(self._pack_list)
+        pv.addWidget(self._pack_list, 1)
 
+        # 一行放下三个动作（旧版「添加包」独占一整行，纵向很占地方）
+        row2 = QHBoxLayout()
+        row2.setSpacing(6)
         self._btn_add = T(QPushButton(), "添加包…")
         self._btn_add.setObjectName("PrimaryButton")
         T(self._btn_add, "导入瓦片包/素材包（.tilepack、导出 zip、导出文件夹或普通图片文件夹）", attr="tooltip")
         self._btn_add.clicked.connect(self.pick_and_add)
-        pv.addWidget(self._btn_add)
-
-        row2 = QHBoxLayout()
-        row2.setSpacing(6)
-        self._btn_remove = T(QPushButton(), "移除包")
+        row2.addWidget(self._btn_add, 2)
+        self._btn_remove = T(QPushButton(), "移除")
         self._btn_remove.setObjectName("ToolBtn")
+        T(self._btn_remove, "移除选中的包（不移除磁盘文件）", attr="tooltip")
         self._btn_remove.clicked.connect(self.remove_current_pack)
+        row2.addWidget(self._btn_remove, 1)
         self._btn_clear = T(QPushButton(), "清空")
         self._btn_clear.setObjectName("ToolBtn")
+        T(self._btn_clear, "清空所有已加载的包", attr="tooltip")
         self._btn_clear.clicked.connect(self.clear)
-        row2.addWidget(self._btn_remove, 1)
         row2.addWidget(self._btn_clear, 1)
         pv.addLayout(row2)
 
         self._stats = QLabel()
         self._stats.setObjectName("HintLabel")
+        # 允许换行：单行不换行的话 QLabel 的最小宽度 = 整行文字宽度，会把整条左栏撑住拖不窄
         self._stats.setWordWrap(True)
+        self._stats.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         pv.addWidget(self._stats)
 
         pack_docker = Docker("瓦片包", pack_body, icon_kind="tiles")
@@ -186,59 +192,58 @@ class PackBrowser(QWidget):
         av.setContentsMargins(0, 0, 0, 0)
         av.setSpacing(6)
 
-        # ---- 分类切换器：4 列网格，窄栏也不挤 ----
-        self._group = QButtonGroup(self)
-        self._group.setExclusive(True)
-        sw = QWidget()
-        grid = QGridLayout(sw)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(4)
-        grid.setVerticalSpacing(4)
-        for i, (key, label) in enumerate(CATEGORIES):
-            btn = T(QPushButton(), label)
-            btn.setCheckable(True)
-            btn.setObjectName("SegmentButton")
-            btn.setProperty("category", key)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._group.addButton(btn)
-            grid.addWidget(btn, i // 4, i % 4)
-            if key == "all":
-                btn.setChecked(True)
-        for col in range(4):
-            grid.setColumnStretch(col, 1)
-        self._group.buttonClicked.connect(lambda _b: self._refresh_assets())
-        av.addWidget(sw)
-
+        # ---- 分类 + 搜索同一行：比 8 个按钮铺两行省一半高度，也更清爽 ----
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(6)
+        self._category_combo = QComboBox()
+        self._category_combo.setObjectName("CategoryCombo")
+        for key, label in CATEGORIES:
+            self._category_combo.addItem(tr(label), key)
+        T(self._category_combo, "按资源类型过滤缩略图", attr="tooltip")
+        self._category_combo.currentIndexChanged.connect(lambda _i: self._refresh_assets())
+        filter_row.addWidget(self._category_combo, 0)
         self._search = QLineEdit()
         self._search.setObjectName("SearchBox")
         T(self._search, "搜索资源…", attr="placeholder")
         self._search.setClearButtonEnabled(True)
         self._search.textChanged.connect(lambda _t: self._refresh_assets())
-        av.addWidget(self._search)
+        filter_row.addWidget(self._search, 1)
+        av.addLayout(filter_row)
 
-        # ---- 目录树：包内每一级目录 ----
+        # ---- 目录树 / 缩略图：中间是可拖动的分隔条（旧版给树写死 120–220 高度，拖不动） ----
+        self._asset_split = QSplitter(Qt.Orientation.Vertical)
+        self._asset_split.setObjectName("AssetSplit")
+        self._asset_split.setChildrenCollapsible(False)
+        self._asset_split.setHandleWidth(scaled(5))
+
         self._tree = QTreeWidget()
         self._tree.setObjectName("PackTree")
         self._tree.setHeaderHidden(True)
         self._tree.setUniformRowHeights(True)
-        self._tree.setMinimumHeight(120)
-        self._tree.setMaximumHeight(220)
+        self._tree.setIndentation(scaled(14))
+        self._tree.setAnimated(True)
+        self._tree.setMinimumHeight(scaled(80))
         T(self._tree, "包内目录：展开到任意一级即可浏览该层资源", attr="tooltip")
         self._tree.currentItemChanged.connect(lambda cur, _prev: self._on_tree_changed(cur))
-        av.addWidget(self._tree)
+        self._asset_split.addWidget(self._tree)
 
         # ---- 缩略图网格 ----
         self._grid = QListWidget()
         self._grid.setObjectName("AssetGrid")
         self._grid.setViewMode(QListWidget.ViewMode.IconMode)
         self._grid.setIconSize(QSize(48, 48))
-        self._grid.setGridSize(QSize(74, 84))
+        self._grid.setGridSize(QSize(72, 82))
         self._grid.setResizeMode(QListWidget.ResizeMode.Adjust)
         self._grid.setMovement(QListWidget.Movement.Static)
         self._grid.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._grid.itemDoubleClicked.connect(lambda _i: self._emit(True))
-        self._grid.setMinimumHeight(140)
-        av.addWidget(self._grid, 1)
+        self._grid.setMinimumHeight(scaled(120))
+        self._asset_split.addWidget(self._grid)
+
+        self._asset_split.setStretchFactor(0, 1)
+        self._asset_split.setStretchFactor(1, 2)
+        self._asset_split.setSizes([scaled(170), scaled(300)])
+        av.addWidget(self._asset_split, 1)
 
         # ---- 操作按钮 ----
         row3 = QHBoxLayout()
@@ -386,6 +391,17 @@ class PackBrowser(QWidget):
 
     def retranslate_ui(self) -> None:
         """语言切换后重刷统计行与目录树/范围标签（它们含动态数字与译名）。"""
+        # 分类下拉是运行时填的，语言切换要重建条目文案（保留当前选中项）
+        combo = getattr(self, "_category_combo", None)
+        if combo is not None:
+            current = self._active_category()
+            combo.blockSignals(True)
+            combo.clear()
+            for key, label in CATEGORIES:
+                combo.addItem(tr(label), key)
+            index = combo.findData(current)
+            combo.setCurrentIndex(index if index >= 0 else 0)
+            combo.blockSignals(False)
         try:
             self._refresh()
         except Exception as exc:  # noqa: BLE001
@@ -540,8 +556,19 @@ class PackBrowser(QWidget):
 
     # ------------------------------------------------------------------ #
     def _active_category(self) -> str:
-        btn = self._group.checkedButton()
-        return str(btn.property("category")) if btn is not None else "all"
+        return str(self._category_combo.currentData() or "all")
+
+    def category(self) -> str:
+        """当前分类键（all / terrain / building / prop / sheet / atlas / tile / texture）。"""
+        return self._active_category()
+
+    def set_category(self, key: str) -> bool:
+        """切换分类（供快捷键/外部调用）；键不存在返回 False。"""
+        index = self._category_combo.findData(key)
+        if index < 0:
+            return False
+        self._category_combo.setCurrentIndex(index)
+        return True
 
     def _refresh(self) -> None:
         """重建目录树 + 资源列表 + 统计。"""

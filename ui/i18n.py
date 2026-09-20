@@ -295,6 +295,10 @@ LANG_PACKS: dict = {
         "替换画布": "Replace canvas",
         "用选中的资源替换整张画布（画布尺寸随之改变）": "Replace the whole canvas with the selected asset (canvas is resized)",
         "移除包": "Remove pack",
+        "移除": "Remove",
+        "移除选中的包（不移除磁盘文件）": "Remove the selected pack (files on disk are kept)",
+        "清空所有已加载的包": "Unload every loaded pack",
+        "按资源类型过滤缩略图": "Filter the thumbnails by asset type",
         "请先在列表里选择一个资源": "Select an asset in the list first",
         "包 {0} · 地形 {1} · 拼件 {2} · 素材 {3} · 底图 {4}": "Packs {0} · terrain {1} · pieces {2} · props {3} · sheets {4}",
         "瓦片包 / 素材包": "Tile & prop packs",
@@ -633,9 +637,11 @@ LANG_PACKS: dict = {
     "手动：逐步执行，每步完成后可重跑或继续": "Manual: run step by step; after each step you can rerun it or continue",
     "自动：无干涉跑完全流程": "Auto: run the whole pipeline without interruption",
     # ---------- 像素页 ----------
-    # ---------- 像素页 ----------
     "画布设置": "Canvas settings",
     "预设": "Presets",
+    "常用分辨率预设": "Common resolution presets",
+    "画布宽度（像素）": "Canvas width (pixels)",
+    "画布高度（像素）": "Canvas height (pixels)",
     "背景": "Background",
     "透明": "Transparent",
     "白色": "White",
@@ -1195,6 +1201,72 @@ LANG_PACKS: dict = {
     "保留两种分辨率：完美像素原生 {0}×{1}，用户预设 {2}×{3}": "Keeping both resolutions: perfect-pixel native {0}×{1} and user preset {2}×{3}",
     "背景处理：纯色背景={0}，抠图={1}{2}": "Background: solid={0}, keying={1}{2}",
     "，键色 {0}，容差 {1}": ", key {0}, tolerance {1}",
+    # ---------- 一键适配端点（端点探测 / 结果对话框 / Base URL 规整） ----------
+    "一键适配端点…": "Adapt endpoints…",
+    "自动探测该中转站真实可用的提交端点，并一键写入提交端点/轮询端点/服务商适配；默认只发无害的 GET 请求":
+        "Probes which submit endpoints this relay really serves and fills in Submit endpoint / Poll endpoint / Provider adapter for you; only harmless GET requests are sent by default",
+    "正在探测可用端点…": "Probing available endpoints…",
+    "探测失败: {0}": "Probe failed: {0}",
+    "已写入端点：{0}（点「保存配置」后生效）": "Endpoint written: {0} (takes effect after Save config)",
+    "一键适配端点 — 探测结果": "Adapt endpoints — probe results",
+    "Base URL：{0}": "Base URL: {0}",
+    "端点路径": "Endpoint path",
+    "说明": "Notes",
+    "推荐": "Recommended",
+    "使用这个端点": "Use this endpoint",
+    "未探测": "not probed",
+    "（未填写）": "(not set)",
+    "未推断": "not inferred",
+    "推荐端点：{0}（提交端点 {1}，轮询端点 {2}）":
+        "Recommended endpoint: {0} (submit {1}, poll {2})",
+    "没有探测到可用端点": "No usable endpoint detected",
+    "没有探测到可用端点：请确认 Base URL 是否正确，或改用「从 curl 导入…」粘贴服务商文档里的示例":
+        "No usable endpoint detected: check the Base URL, or use “Import from curl…” and paste the example request from your provider's docs",
+    "复制诊断信息": "Copy diagnostics",
+    "已复制诊断信息到剪贴板": "Diagnostics copied to the clipboard",
+    "用 POST 再探测一次…": "Probe again with POST…",
+    "正在用 POST 重新探测…": "Re-probing with POST…",
+    "POST 探测会在站点上真实提交一次请求：宽松的中转站可能真的创建任务并计费，请自行确认":
+        "POST probing sends one real request to the service: a permissive relay may actually create a task and charge you — proceed at your own risk",
+    # 探测结论（GET/POST 列与逐行说明；core.api.endpoint_probe 产出中文，界面用 tr() 渲染）
+    "可用": "OK",
+    "存在": "exists",
+    "需鉴权": "auth",
+    "不存在": "missing",
+    "无响应": "no response",
+    "已找到可用端点：{0}": "Usable endpoint found: {0}",
+    "找到只接受 POST 的端点：{0}（GET 返回 405；建议点「用 POST 再探测一次」确认）":
+        "Found a POST-only endpoint: {0} (GET returned 405; use “Probe again with POST” to confirm)",
+    "端点可用：服务端正常响应了探测请求": "Endpoint usable: the server answered the probe normally",
+    "端点存在：服务端返回业务错误，说明路径有效":
+        "Endpoint exists: the server returned a business error, so the path is valid",
+    "端点存在：鉴权失败，请检查「鉴权方式」":
+        "Endpoint exists: authentication failed — check Authentication",
+    "端点存在：不接受 GET（这类端点只能用 POST 提交）":
+        "Endpoint exists: GET is not allowed (this kind of endpoint only accepts POST)",
+    "端点不存在：返回 404/405 或 Invalid URL / not found":
+        "Endpoint missing: 404/405, or Invalid URL / not found in the body",
+    "无法判断：未收到可识别的响应": "Unknown: no recognisable response",
+    "POST 探测被接受（宽松站点可能已真实创建任务，请到站点后台确认）":
+        "POST probe accepted (a permissive relay may really have created a task — check your dashboard)",
+    "POST 被拒绝，说明端点有效（请求体不符合站点要求）":
+        "POST rejected, which proves the endpoint is valid (the body did not match the site's expectations)",
+    "POST 需要鉴权（请检查「鉴权方式」）": "POST needs authentication (check Authentication)",
+    "POST 提示该路径不存在": "POST reports the path as missing",
+    "POST 探测未收到可识别的响应": "POST probe got no recognisable response",
+    "网络异常：{0}": "Network error: {0}",
+    # Base URL 规整说明（core.api.endpoint_probe.normalize_base_url）
+    "已把末尾的端点路径 {0} 拆到「提交端点」，Base URL 只保留 {1}":
+        "Moved the trailing endpoint path {0} into Submit endpoint; Base URL now keeps only {1}",
+    "粘贴的地址缺少协议头，已自动按 https:// 处理":
+        "The pasted address had no scheme, so https:// was assumed",
+    "已忽略地址里的查询参数或锚点（?… / #…）":
+        "Query parameters / fragment in the address were ignored (?… / #…)",
+    "Base URL 已是干净的地址（未包含多余端点路径）":
+        "The Base URL is already clean (no extra endpoint path)",
+    "Base URL 为空，无法探测端点": "Base URL is empty — cannot probe endpoints",
+    # 中转站预设名（设置页「服务商预设」下拉）
+    "中转站：一键适配端点": "Relay: one-click endpoint adapt",
     },
 }
 

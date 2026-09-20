@@ -51,10 +51,7 @@ def test_browser_loads_packs_and_switches_categories(qtbot, tmp_path):
     assert st == {"packs": 2, "terrains": 2, "pieces": 2, "props": 2, "sheets": 1}
 
     def count(cat: str) -> int:
-        for btn in browser._group.buttons():
-            if btn.property("category") == cat:
-                btn.setChecked(True)
-        browser._refresh_assets()
+        assert browser.set_category(cat), f"分类不存在: {cat}"
         return browser._grid.count()
 
     assert count("all") == 2 + 2 + 1          # 地形 2 + 拼件 2 + 底图 1
@@ -63,12 +60,50 @@ def test_browser_loads_packs_and_switches_categories(qtbot, tmp_path):
     assert count("building") == 0
     assert count("sheet") == 1
     # 搜索过滤（先切回"全部"，否则会叠加分类过滤）
-    for btn in browser._group.buttons():
-        if btn.property("category") == "all":
-            btn.setChecked(True)
+    browser.set_category("all")
     browser._search.setText("tree")
     browser._refresh_assets()
     assert browser._grid.count() == 2
+
+
+def test_browser_sections_are_resizable(qtbot):
+    """目录树 / 缩略图之间要有可拖动分隔条，且不再被写死高度（用户反馈：框大小调不了）。"""
+    from PySide6.QtWidgets import QSplitter
+
+    browser = PackBrowser()
+    qtbot.addWidget(browser)
+    browser.resize(300, 700)
+    browser.show()
+
+    split = browser._asset_split
+    assert isinstance(split, QSplitter) and split.count() == 2
+    assert split.widget(0) is browser._tree and split.widget(1) is browser._grid
+    # 没有被 setMaximumHeight 卡住（旧版树 220、包列表 78）
+    assert browser._tree.maximumHeight() > 2000
+    assert browser._pack_list.maximumHeight() > 2000
+    assert browser._tree.minimumHeight() < 200 and browser._grid.minimumHeight() < 300
+    # 真的能拖大
+    split.setSizes([420, 160])
+    assert split.sizes()[0] > split.sizes()[1], split.sizes()
+
+
+def test_browser_category_roundtrip_keeps_selection(qtbot):
+    """语言切换后分类下拉的条目要重译，且保持当前选中项。"""
+    from ui.i18n import retranslate_all, set_language
+
+    browser = PackBrowser()
+    qtbot.addWidget(browser)
+    set_language("zh")
+    assert browser.set_category("atlas")
+    texts_zh = [browser._category_combo.itemText(i) for i in range(browser._category_combo.count())]
+    set_language("en")
+    retranslate_all()
+    browser.retranslate_ui()
+    texts_en = [browser._category_combo.itemText(i) for i in range(browser._category_combo.count())]
+    assert browser.category() == "atlas", "切换语言后应保持选中分类"
+    assert texts_en != texts_zh and any("Atlas" in t or "atlas" in t.lower() for t in texts_en)
+    set_language("zh")
+    retranslate_all()
 
 
 def test_browser_asset_choice_and_signals(qtbot, tmp_path):
@@ -200,10 +235,7 @@ def test_browser_browses_every_folder_level(qtbot, tmp_path):
 
     # 分类切换器在目录范围内同样生效（单瓦片 / 图集 / 纹理）
     def count(cat: str) -> int:
-        for btn in browser._group.buttons():
-            if btn.property("category") == cat:
-                btn.setChecked(True)
-        browser._refresh_assets()
+        assert browser.set_category(cat), f"分类不存在: {cat}"
         return browser._grid.count()
 
     browser.set_scope(0, "")

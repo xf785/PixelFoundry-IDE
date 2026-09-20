@@ -505,6 +505,48 @@ def test_image_404_invalid_url_hint():
     assert "提示" in result.error
 
 
+def test_video_404_invalid_url_hint_points_at_endpoint_adapter():
+    """视频端点在中转站上不存在（可灵专有路径 + 404 Invalid URL）时，
+    提示要指向「一键适配端点…」，并给出「从 curl 导入…」这条备选路。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            404, json={"error": {"message": "Invalid URL (POST /v1/videos/image2video)"}}
+        )
+
+    cfg = video_config(submit_url="{base}/v1/videos/image2video")
+    api = VideoAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.call(image_bytes=tiny_png_bytes(), prompt="p")
+    assert not result.ok
+    assert "404" in result.error
+    assert "一键适配端点" in result.error
+    assert "从 curl 导入" in result.error
+    # 提示只追加一次（_request 与 call 两处都会经过 _friendly_error）
+    assert result.error.count("一键适配端点") == 1
+
+
+def test_video_404_plain_body_also_mentions_endpoint_adapter():
+    """没有 Invalid URL 字样、只有 404 时也照样提示（端点不存在是同一个坑）。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="not found")
+
+    api = VideoAPI(video_config(), transport=httpx.MockTransport(handler))
+    result = api.call(image_bytes=tiny_png_bytes(), prompt="p")
+    assert not result.ok
+    assert "一键适配端点" in result.error
+
+
+def test_image_404_keeps_generic_v1_hint_without_video_adapter_hint():
+    """非视频类型不出现视频专用提示（保持原有 /v1 提示语）。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": {"message": "Invalid URL (POST /v1/images/generations)"}})
+
+    cfg = llm_config(base_url="https://relay.example.com")
+    api = ImageAPI(cfg, transport=httpx.MockTransport(handler))
+    result = api.call(prompt="cat")
+    assert not result.ok
+    assert "一键适配端点" not in result.error
+
+
 def test_doubao_submit_payload_and_endpoints():
     captured = {}
 

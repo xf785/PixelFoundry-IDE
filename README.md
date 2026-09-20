@@ -38,7 +38,7 @@ middle, results and log on the right.</em></p>
 - 🖌️ **Krita-style pixel editor** — color-family palette with right-click whole-family replace, right-click color wheel, selection & floating layers, onion skin, palette lock.
 - 🖼️ **Standalone pixel board** — 4th mode with resolution settings, two-way IDE sync, and video-first-frame handoff (NEAREST upscale, never blurry); Krita-style resizable docks plus a **tile/prop pack browser** that browses **every folder level** inside a pack (atlases, individual tiles, textures, raw sheets), with category switcher, search, thumbnails, place/replace on canvas and auto-restore |
 - 🌐 **Bilingual + scalable UI** — Chinese / English, UI scale 0.8×–1.5×, self-drawn DSH-style icons.
-- 🔌 **Provider-agnostic & relay-friendly** — one-click presets for DeepSeek, Kimi, Zhipu, SiliconFlow, Ark, DashScope, Hunyuan, Ollama, gpt.ge, Kling… plus proxy & SSL options. The **video API is fully configurable**: six auth styles (Bearer / X-API-Key / api-key / query param / custom header / none), configurable submit & poll endpoints, methods and body templates, **paste “Copy as cURL” to import a whole config**, and **Preview request / Test & detect fields** to auto-discover the task-id, status and video-URL paths (see the [API setup guide](docs/api_setup.md)).
+- 🔌 **Provider-agnostic & relay-friendly** — one-click presets for DeepSeek, Kimi, Zhipu, SiliconFlow, Ark, DashScope, Hunyuan, Ollama, gpt.ge, Kling… plus proxy & SSL options. The **video API is fully configurable**: six auth styles (Bearer / X-API-Key / api-key / query param / custom header / none), configurable submit & poll endpoints, methods and body templates, **paste “Copy as cURL” to import a whole config**, **One-click endpoint adapt** (probes which submit endpoint your relay actually serves and fills in the submit/poll URLs — harmless GETs only, POST probing is manual), and **Preview request / Test & detect fields** to auto-discover the task-id, status and video-URL paths (see the [API setup guide](docs/api_setup.md)).
 - 📦 **Open source** — MIT license, CI on GitHub Actions (Win + Linux), Windows releases via PyInstaller.
 
 ## 🚀 Quick Start
@@ -116,8 +116,13 @@ A dedicated pixel canvas (reusing the full editor):
   folder without a manifest**. **Every folder level inside a pack is browsable**: expand `atlas/`
   (47-tile sheets), `tiles/terrain_1/` (each individual tile), `textures/`, `source/` (raw AI sheets),
   `pieces/`, `props/` and clicking any level filters the thumbnail grid. Combined with the category
-  switcher (all / terrain / buildings / props / sheets / atlases / tiles / textures) plus search, then
-  **Place on canvas** (centred, canvas size kept) or **Replace canvas**. Loaded packs are remembered.
+  dropdown plus search, then **Place on canvas** (centred, canvas size kept) or **Replace canvas**.
+  Loaded packs are remembered.
+- **Resizable inside the dock too**: the divider between the pack list, the folder tree and the
+  thumbnails is **draggable** (it turns blue on hover) — pull the tree or the thumbnail area as large
+  as you need; the whole asset dock itself can still be widened or collapsed into a vertical tab.
+- **Tighter canvas panel**: resolution preset + width×height share one row, background + *New canvas*
+  another, canvas info is folded into the same panel, leaving just **Canvas settings** and **Export**.
 
 <p align="center">
   <img src="docs/screenshots/02-pixel-canvas-pack-browser.png" alt="Standalone pixel canvas: in-pack folder browsing plus the colour-family palette" width="880"/>

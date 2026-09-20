@@ -214,7 +214,9 @@ PROVIDER_PRESETS: Dict[str, List[dict]] = {
         {"key": "kling", "label": "快手可灵 Kling（直连需 JWT，经中转用 Bearer Key）", "base_url": "https://api.klingai.com", "model": "kling-v1-6",
          "hint": "官方直连的 API Key 是 JWT（形如 eyJ…），用默认 Bearer 即可；"
                  "若是中转站转发的可灵接口，Key 通常换了格式——此时把「鉴权方式」改成中转站要求的方式"
-                 "（常见 X-API-Key / api-key / URL 查询参数）。",
+                 "（常见 X-API-Key / api-key / URL 查询参数）。"
+                 "注意 {base}/v1/videos/image2video 是**可灵专有路径**，只在可灵官方直连有效；"
+                 "中转站转发的可灵接口若返回 404 Invalid URL，请改用「一键适配端点…」自动探测该站端点。",
          "params": {
              "provider": "generic",
              "submit_url": "{base}/v1/videos/image2video",
@@ -227,6 +229,26 @@ PROVIDER_PRESETS: Dict[str, List[dict]] = {
              "mode": "std",
              "poll_interval": 3,
              "max_polls": 180,
+         }},
+        {"key": "relay_autodetect", "label": "中转站：一键适配端点", "base_url": "https://your-relay.example.com", "model": "",
+         "hint": "不确定中转站把视频接口挂在哪条路径时用这个预设：填好 Base URL 与 API Key，"
+                 "点「一键适配端点…」即可按一批常见路径自动探测（如 /v1/videos/generations、"
+                 "/contents/generations/tasks…），并把「提交端点 / 轮询端点 / 服务商适配」一键写回表单。"
+                 "探测默认只发无害的 GET（不会创建任务）；POST 探测需要在结果窗口里手动点一次。"
+                 "模型名称请按站点文档或「查询模型」填写。",
+         "params": {
+             "provider": "generic",
+             "auth_style": "bearer",
+             "submit_url": "",
+             "poll_url": "",
+             "submit_method": "POST",
+             "poll_method": "GET",
+             "job_id_path": "id",
+             "status_path": "status",
+             "result_video_url_path": "data.0.url",
+             "payload_template": '{"model": "$model", "prompt": "$prompt", "image": "$image"}',
+             "poll_interval": 5,
+             "max_polls": 120,
          }},
         {"key": "relay_generic_poll", "label": "中转站：提交+轮询（通用模板）", "base_url": "https://your-relay.example.com", "model": "your-video-model",
          "hint": "多数中转站（one-api / new-api 等）走「POST 提交拿任务 ID → GET 轮询状态」："

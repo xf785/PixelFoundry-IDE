@@ -25,7 +25,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -210,74 +209,64 @@ class PixelPage(QWidget):
             browser.retranslate_ui()
 
     def _build_right_dock(self) -> None:
-        """右停靠栏：画布设置 + 画布信息。"""
+        """右停靠栏：画布设置（含画布信息）+ 导出 —— 面板更少、行更紧凑。"""
         self._right_dock = SideDock(tr("画布"), side="right", default_width=RIGHT_DOCK_W)
 
         # ---- 画布设置 ----
         box = QWidget()
-        f = QFormLayout(box)
-        f.setContentsMargins(0, 0, 0, 0)
-        f.setVerticalSpacing(scaled(8))
-        f.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        # 窄停靠栏里让标签自动换到字段上方，面板因此可以拖得更窄
-        f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        v = QVBoxLayout(box)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(scaled(8))
 
+        # 第 1 行：预设 + 宽×高（原来占两行）
+        row1 = QHBoxLayout()
+        row1.setSpacing(scaled(6))
         self._preset_combo = QComboBox()
         for s in RESOLUTION_PRESETS:
             self._preset_combo.addItem(f"{s}×{s}", userData=s)
         self._preset_combo.setCurrentIndex(2)  # 64×64
         self._preset_combo.setMinimumWidth(scaled(72))
+        T(self._preset_combo, "常用分辨率预设", attr="tooltip")
         self._preset_combo.currentIndexChanged.connect(self._on_preset)
-        f.addRow(T(QLabel(), "预设"), self._preset_combo)
-
-        custom_row = QWidget()
-        cr = QHBoxLayout(custom_row)
-        cr.setContentsMargins(0, 0, 0, 0)
-        cr.setSpacing(scaled(4))
+        row1.addWidget(self._preset_combo, 1)
         self._custom_w = QSpinBox()
         self._custom_w.setRange(8, 1024)
         self._custom_w.setValue(64)
-        self._custom_w.setMinimumWidth(scaled(52))
-        cr.addWidget(self._custom_w, 1)
-        cr.addWidget(QLabel("×"))
+        self._custom_w.setMinimumWidth(scaled(48))
+        T(self._custom_w, "画布宽度（像素）", attr="tooltip")
+        row1.addWidget(self._custom_w, 1)
+        row1.addWidget(QLabel("×"))
         self._custom_h = QSpinBox()
         self._custom_h.setRange(8, 1024)
         self._custom_h.setValue(64)
-        self._custom_h.setMinimumWidth(scaled(52))
-        cr.addWidget(self._custom_h, 1)
-        f.addRow(T(QLabel(), "宽 × 高"), custom_row)
+        self._custom_h.setMinimumWidth(scaled(48))
+        T(self._custom_h, "画布高度（像素）", attr="tooltip")
+        row1.addWidget(self._custom_h, 1)
+        v.addLayout(row1)
 
+        # 第 2 行：背景 + 新建画布（原来占两行）
+        row2 = QHBoxLayout()
+        row2.setSpacing(scaled(6))
         self._bg_combo = QComboBox()
         for key, fill in _BG_FILLS.items():
             self._bg_combo.addItem(T(None, key), userData=key)
-        self._bg_combo.setMinimumWidth(scaled(72))
-        f.addRow(T(QLabel(), "背景"), self._bg_combo)
-
+        self._bg_combo.setMinimumWidth(scaled(64))
+        row2.addWidget(self._bg_combo, 1)
         self._btn_new = T(QPushButton(), "新建画布")
         self._btn_new.setObjectName("PrimaryButton")
         self._btn_new.clicked.connect(self._on_new)
-        f.addRow("", self._btn_new)
+        row2.addWidget(self._btn_new, 1)
+        v.addLayout(row2)
 
-        settings_docker = self._right_dock.add_docker("画布设置", box, icon_kind="grid", stretch=1)
-        settings_docker.set_icon("grid")
-
-        # ---- 画布信息 ----
-        info = QWidget()
-        iv = QVBoxLayout(info)
-        iv.setContentsMargins(0, 0, 0, 0)
-        iv.setSpacing(scaled(4))
+        # 画布信息直接并入本面板（少一个 docker，界面更干净）
         self._info_label = QLabel()
         self._info_label.setObjectName("HintLabel")
         self._info_label.setWordWrap(True)
-        iv.addWidget(self._info_label)
-        hint = T(QLabel(), "提示：在左侧资源网格里双击资源 = 直接放入画布。")
-        hint.setObjectName("HintLabel")
-        hint.setWordWrap(True)
-        iv.addWidget(hint)
-        iv.addStretch(1)
-        info_docker = self._right_dock.add_docker("画布信息", info, icon_kind="background")
-        info_docker.set_icon("background")
+        v.addWidget(self._info_label)
+        v.addStretch(1)
+
+        settings_docker = self._right_dock.add_docker("画布设置", box, icon_kind="grid", stretch=1)
+        settings_docker.set_icon("grid")
 
         # ---- 导出（倍率 + 复制到剪贴板） ----
         export = QWidget()

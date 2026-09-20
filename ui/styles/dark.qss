@@ -276,6 +276,16 @@ QSplitter::handle:vertical {
 QSplitter::handle:hover {
     background-color: #5686fe;
 }
+/* 资源栏「目录树 / 缩略图」之间的分隔条：平时细线，悬停变蓝，提示可以拖 */
+QSplitter#AssetSplit::handle:vertical {
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+QSplitter#AssetSplit::handle:vertical:hover {
+    background-color: rgba(86, 134, 254, 0.55);
+}
 QSplitter#Workspace::handle {
     background-color: transparent;
 }

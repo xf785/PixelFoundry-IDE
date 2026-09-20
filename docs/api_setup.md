@@ -53,12 +53,15 @@
 
 - **Base URL**：填到「版本前缀」为止，例如 `https://api.openai.com/v1`、
   `https://ark.cn-beijing.volces.com/api/v3`。**不要**把具体接口名写进去。
+  拿不准时也不用怕粘错：视频配置页的「一键适配端点…」会先把地址规整好
+  （去掉尾斜杠/查询串、把误粘进来的端点路径拆到「提交端点」），详见第六节。
 - **端点路径(可选)**：Base URL 之外的额外路径。常见坑：Base URL 已带 `/api/v3` 时
   还填 `/api/v3/images/generations`，最终会拼成 `…/api/v3/api/v3/images/…`（404）。
 - **完整 URL 覆盖**：图片/文本 API 支持用 `url` 参数（在「完全自定义」场景）直接覆盖整条地址。
 - 视频 API 的端点用 **`{base}` / `{id}` 占位符**：
   - 提交端点：`{base}/v1/videos/image2video`
   - 轮询端点：`{base}/v1/videos/image2video/{id}`（`{id}` = 提交返回的任务 ID）
+  - 不确定站点用哪条路径时，用「一键适配端点…」自动探测（第六节）。
 - 「查询模型」会自动兼容两种写法：Base URL 带 `/v1` 时请求 `{base}/models`，
   不带时请求 `{base}/v1/models`。
 
@@ -128,6 +131,10 @@ Base URL : https://relay.example.com/v1
 3. 找到目标请求 → 右键 → **复制 → 以 cURL 格式复制（Copy as cURL）**；
 4. 回到应用：设置 → 对应 API 类型 → **「从 curl 导入…」** → 粘贴 → 「解析并填入」。
 
+> 视频接口还有一条更省事的路：**「一键适配端点…」**（第六节）不需要你找到任何一条
+> 真实请求，直接按一批常见路径探测出站点可用的端点；两者可以配合使用——先适配，
+> 探不到再用 curl 导入。
+
 导入器会自动：
 
 - 解析多行命令（含行尾 `\`、单/双引号、`--url`、`-X`、`-H`、`-d/--data-raw/--data-binary/--json`）；
@@ -147,15 +154,94 @@ Base URL : https://relay.example.com/v1
 
 ---
 
-## 六、预览请求 / 测试并检测字段
+## 六、预览请求 / 测试并检测字段 / 一键适配端点
 
-视频 API 配置页多了三个按钮（图片/文本 API 有「从 curl 导入…」）：
+视频 API 配置页多了四个按钮（图片/文本 API 有「从 curl 导入…」）：
 
 | 按钮 | 做什么 | 会不会发请求 |
 | --- | --- | --- |
 | **预览请求…** | 展示将要发出的「方法 + URL + 请求头 + JSON 请求体」（Key 已打码为 `***`，可一键复制） | **不发**，纯本地组装 |
 | **测试并检测字段…** | 用一张程序合成的 256×256 测试图**真发一次提交请求**（不轮询），显示 HTTP 状态与原始响应，并列出识别到的字段路径 | 发 1 次 |
+| **一键适配端点…** | 按一批常见提交路径逐条探测，找出这个中转站真正提供的那一条，并一键写入「提交端点 / 轮询端点 / 服务商适配」 | 默认只发无害的 **GET**（见下） |
 | **从 curl 导入…** | 粘贴 cURL 命令自动填配置（见第五节） | 不发 |
+
+### 6.1 一键适配端点（推荐的中转站起手式）
+
+中转站把上游接口重新挂在自己的域名下，**路径与官方文档不一致是常态**：官方文档里的
+`POST https://api.klingai.com/v1/videos/image2video` 直接搬到中转站上，得到的通常是
+
+```
+HTTP 状态码: 404
+{"error":{"message":"Invalid URL (POST /v1/videos/image2video)","type":"invalid_request_error"}}
+```
+
+这时不用逐个手填试错，点 **「一键适配端点…」** 即可：
+
+1. **先规整 Base URL**：粘贴的地址里如果带着端点路径（如
+   `https://relay.example.com/v1/videos/image2video`），程序会把它拆成
+   Base URL `https://relay.example.com/v1` + 提交端点 `/videos/image2video`
+   并顺手写进表单（表单里会写明拆分结果）。
+2. **再逐条探测**（默认只发 **GET**，顺序如下）：
+
+   | 探测路径 | 覆盖形态 |
+   | --- | --- |
+   | `/v1/videos/generations`、`/videos/generations`、`/v1/video/generations` | OpenAI 风格中转站（最常见） |
+   | `/v1/videos`、`/v1/images/videos` | OpenAI Sora 风格 |
+   | `/v1/videos/image2video`、`/v1/image_to_video`、`/v1/video/generations/image2video` | 可灵 / 厂商专有 |
+   | `/contents/generations/tasks`、`/api/v3/contents/generations/tasks` | 火山方舟 Seedance |
+   | `/task/volces/seedance` | gpt.ge (V-API) |
+   | `/v1/tasks`、`/v1/task`、`/v1/generations`、`/v1/video_generation`、`/v1/video/create` | 各类自建网关 |
+
+3. **读结果表**：每行给出「端点路径 / GET / POST / 说明」，推荐行高亮并标「推荐」：
+
+   | GET 列 | 含义 | 能不能当端点用 |
+   | --- | --- | --- |
+   | `200 可用` | 正常响应 | 可以，但可能是列表类接口，建议再核对一次 |
+   | `400 存在` / `422 存在` | 服务端返回业务错误（如缺少 model/prompt） | **可以**——路径确实存在，只是我们没给参数 |
+   | `401 需鉴权` / `403` | 路径存在，Key 没对上 | 路径对，去改「鉴权方式」 |
+   | `404 不存在` / `405` | 路径不存在（或返回 Invalid URL / not found） | 换下一条 |
+   | `无响应` / `未知` | 网络异常或返回无法识别 | 先排查网络/代理 |
+
+4. **点「使用这个端点」**：把该行写进「提交端点 / 轮询端点 / 服务商适配」，
+   最后**点「保存配置」**持久化。轮询端点按提交路径自动推断：
+   `…/generations`、`…/tasks`、`…/image2video` 追加 `/{id}`；
+   gpt.ge 形态用 `{base}/task/{id}`；`…/video_generation` 用
+   `{base}/v1/query/video_generation?task_id={id}`。
+
+关于请求量：
+
+- **默认只发 GET，是无害的**：GET 打在不存在的路径上只会拿到 404/405，
+  不会创建任务、不消耗额度；
+- 表格里的 POST 列在默认情况下显示「未探测」。如果 GET 的信号不够
+  （例如站点对任何路径都先返回 401），可以在结果窗口里点
+  **「用 POST 再探测一次…」**——这会对站点**真实提交一次请求**
+  （请求体是故意无效的 `{"model": "__pixelfoundry_endpoint_probe__"}`），
+  宽松的中转站**可能真的创建一个任务并计费**，所以它默认关闭、需要手动触发。
+- 一条都没探到时，窗口会提示：可先核对 Base URL，或改用
+  「从 curl 导入…」粘贴服务商文档里的示例请求。
+
+### 6.2 粘贴完整请求地址也没问题
+
+Base URL 输入框可以直接粘贴文档里那条**完整请求地址**（`normalize_base_url` 会规整它）：
+
+| 你粘贴的 | 规整后的 Base URL | 拆到「提交端点」的路径 |
+| --- | --- | --- |
+| `https://api.x.com` | `https://api.x.com` | —（无变化） |
+| `https://api.x.com/v1/` | `https://api.x.com/v1` | —（去掉尾斜杠） |
+| `api.x.com/v1` | `https://api.x.com/v1` | —（自动补 `https://`） |
+| `https://api.x.com/v1/videos/image2video` | `https://api.x.com/v1` | `/videos/image2video` |
+| `https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks` | `…/api/v3` | `/contents/generations/tasks` |
+| `https://relay.example.com/openai/v1/videos/generations` | `…/openai/v1` | `/videos/generations` |
+| `https://relay.example.com/some/weird/videos/generations` | `https://relay.example.com` | `/some/weird/videos/generations` |
+
+规则要点：缺协议头按 `https://` 处理；去掉首尾空白与结尾 `/`、丢弃 `?查询串` 与 `#锚点`；
+路径里出现 `videos` / `images` / `generations` / `tasks` / `image2video` /
+`video_generation` / `chat/completions` / `contents/generations` 这类片段时，从该处
+拆到「提交端点」；拆出来的前缀若仍像 API 根路径（`/v1`、`/api/v3`、`/api/paas/v4`、
+`/compatible-mode/v1`、`/openai/v1`）就留在 Base URL 里，否则 Base URL 只保留主机名、
+整段路径进端点——**无论哪种拆法，`Base URL + 端点` 都等于你粘贴的那条地址**，信息不会丢。
+
+### 6.3 测试并检测字段的结果怎么读
 
 「测试并检测字段…」的结果区下方会给出候选路径，形如：
 
@@ -226,6 +312,7 @@ Base URL : https://relay.example.com/v1
 | --- | --- | --- |
 | **401 / 403** | Key 放错位置；中转站要 `X-API-Key` / `api-key` / 查询参数；余额不足（少数站点回 403） | 改「鉴权方式」，或选「自定义请求头」填头名前缀，或用「额外请求头」直接覆盖；错误信息里也会提示这点 |
 | **404 Invalid URL** | Base URL 缺 `/v1` 等前缀；端点重复拼了版本段；该站根本不走 OpenAI 路径 | 用「预览请求…」看实际 URL；「从 curl 导入…」拿到真实端点；gpt.ge 视频需选对应适配（`/task/volces/seedance`） |
+| **视频 404 Invalid URL（端点带 `/v1/…`，如可灵 `/v1/videos/image2video`）** | 厂商专有路径只在官方直连有效，中转站换成另一套路径 | 点 **「一键适配端点…」** 自动探测并写入端点（第六节）；错误信息里也会提示这一点 |
 | **404 / 405 只在轮询出现** | 轮询端点写错（少了 `{id}` 或多了路径） | 在「轮询端点」里填 `…/{id}`；用「测试并检测字段…」确认任务 ID |
 | **超时 / SSL/TLS 错误** | 网络被拦截、需要代理 | 高级选项「代理」填 `http://127.0.0.1:7890`；必要时关「校验 SSL 证书」；错误信息会附提示 |
 | **轮询一直不结束** | 状态值不在「成功状态」里；状态字段路径不对 | 「测试并检测字段…」定位状态路径；把站点返回的状态值（如 `SUCCESS`）加进「成功状态」 |
@@ -270,9 +357,9 @@ API Key  : sk-…
                  "duration": "$duration", "ratio": "16:9"}
 ```
 
-最省事的做法：先选预设「中转站：提交+轮询（通用模板）」，
-「从 curl 导入…」把真实端点与请求头填进来，
-再用「测试并检测字段…」一键修正三个字段路径。
+最省事的做法：先选预设「中转站：一键适配端点」或「中转站：提交+轮询（通用模板）」，
+点「一键适配端点…」让它自己找出站点真实可用的端点（找不到再用「从 curl 导入…」），
+最后用「测试并检测字段…」一键修正三个字段路径。
 
 ### 3) 本地 Ollama（文本）
 
@@ -294,10 +381,16 @@ authentication, endpoints and response shapes. This guide covers:
 - **Authentication styles** for all three API kinds (LLM / image / video):
   `Bearer`, `X-API-Key`, `api-key`, URL query parameter, custom header name+prefix, or none.
   Extra headers always win, so you can override anything ad hoc.
-- **Base URL vs endpoint path** rules, and `{base}` / `{id}` placeholders for video
-  submit/poll endpoints.
+- **Base URL vs endpoint path** rules (pasting a whole request URL into the Base URL field is
+  fine — it is split into base + endpoint automatically), and `{base}` / `{id}` placeholders
+  for video submit/poll endpoints.
 - **Relay shapes**: OpenAI-compatible, submit-then-poll task APIs, and Volcengine Ark
   `content` arrays.
+- **One-click endpoint adapt** (video): probes the usual submit paths
+  (`/v1/videos/generations`, `/contents/generations/tasks`, `/task/volces/seedance` …) and
+  writes Submit endpoint / Poll endpoint / Provider adapter for you. Probing is **GET-only by
+  default and therefore harmless**; POST probing is opt-in, one click inside the results
+  window, and may create a real task on a permissive relay.
 - **Import from curl**: paste a browser "Copy as cURL" command and the app fills in the
   base URL, submit endpoint, request method, extra headers and a JSON body template with
   `$prompt` / `$image` / `$image_url` / `$model` … placeholders.

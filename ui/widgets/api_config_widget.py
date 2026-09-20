@@ -6,6 +6,8 @@
 针对中转站/聚合站（relay）的辅助入口（不依赖网络即可构建界面）：
 - 视频：「预览请求…」「测试并检测字段…」——先看将发出的请求，再真发一次提交请求，
   把响应里猜出的任务ID/状态/视频URL 字段路径一键写回表单；
+- 视频：「一键适配端点…」——中转站的提交路径千差万别，这个按钮按一批常见路径发
+  **无害的 GET** 探测，把推荐端点、轮询端点与服务商适配一键写回表单；
 - 三类 API：「从 curl 导入…」——粘贴浏览器 F12 里 Copy as cURL 的命令，
   自动填好 Base URL / 提交端点 / 请求方法 / 额外请求头 / 请求体模板。
 """
@@ -15,8 +17,9 @@ import io
 import logging
 from typing import Dict, Optional
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -39,6 +42,7 @@ from PySide6.QtWidgets import (
 from config.api_config import APIConfig, FIELD_DEFS, PROVIDER_PRESETS
 from config.settings import API_KIND_LABELS
 from core.api.curl_import import parse_curl, to_params
+from core.api.endpoint_probe import normalize_base_url, probe_video_endpoints
 from core.api.factory import is_mock_config
 from ui.i18n import T, tr
 from ui.workers import FunctionWorker
@@ -181,7 +185,7 @@ class ApiConfigWidget(QWidget):
         preset_row.addWidget(self._preset_combo, 1)
         root.addLayout(preset_row)
 
-        # 中转站辅助：预览请求 / 测试并检测字段 / 从 curl 导入（不联网即可构建）
+        # 中转站辅助：预览请求 / 测试并检测字段 / 一键适配端点 / 从 curl 导入（不联网即可构建）
         tools_row = QHBoxLayout()
         tools_row.addWidget(T(QLabel(), "中转站辅助"))
         self._btn_preview = T(QPushButton(), "预览请求…")
@@ -192,16 +196,23 @@ class ApiConfigWidget(QWidget):
         self._btn_probe.setToolTip(tr("真发一次提交请求（不轮询），并自动识别任务ID/状态/视频URL 的字段路径"))
         self._btn_probe.clicked.connect(self._on_probe_request)
         tools_row.addWidget(self._btn_probe)
+        self._btn_adapt = T(QPushButton(), "一键适配端点…")
+        self._btn_adapt.setToolTip(
+            tr("自动探测该中转站真实可用的提交端点，并一键写入提交端点/轮询端点/服务商适配；默认只发无害的 GET 请求")
+        )
+        self._btn_adapt.clicked.connect(self._on_adapt_endpoint)
+        tools_row.addWidget(self._btn_adapt)
         self._btn_curl = T(QPushButton(), "从 curl 导入…")
         self._btn_curl.setToolTip(tr("粘贴浏览器「Copy as cURL」的命令，自动填端点、请求头与请求体模板"))
         self._btn_curl.clicked.connect(self._on_import_curl)
         tools_row.addWidget(self._btn_curl)
         tools_row.addStretch(1)
-        self._relay_buttons = [self._btn_preview, self._btn_probe, self._btn_curl]
+        self._relay_buttons = [self._btn_preview, self._btn_probe, self._btn_adapt, self._btn_curl]
         if self.kind != "video":
-            # 预览/探测目前只对「提交+轮询」型视频接口有意义
+            # 预览/探测/适配目前只对「提交+轮询」型视频接口有意义
             self._btn_preview.hide()
             self._btn_probe.hide()
+            self._btn_adapt.hide()
         root.addLayout(tools_row)
 
         row = QHBoxLayout()
@@ -650,6 +661,84 @@ class ApiConfigWidget(QWidget):
         client.params = params
         self._test_result.setStyleSheet("color: #22c55e;")
         self._test_result.setText(tr("已写入「{0}」= {1}（点「保存配置」后生效）").format(field, path))
+
+    # ------------------------------------------------------------------ #
+    # 一键适配端点（中转站最常见的坑：提交路径与官方文档不一致）
+    # ------------------------------------------------------------------ #
+    def _on_adapt_endpoint(self) -> None:
+        """「一键适配端点…」：规整 Base URL → 探测常见提交端点 → 一键写回表单。
+
+        流程与「测试并检测字段…」一致：同步执行 + 忙碌光标 + 禁用按钮（探测只发
+        无害的 GET，超时有 httpx 兜底）。POST 探测会在站点上真实提交请求，因此不在
+        这里自动触发，而是在对话框里由用户显式点击。
+        """
+        cfg = self._collect_config()
+        if not cfg.base_url:
+            QMessageBox.warning(self, tr("提示"), tr("请先填写 Base URL"))
+            return
+        if is_mock_config(cfg):
+            QMessageBox.information(self, tr("提示"), tr("模拟 API 无需预览/探测请求"))
+            return
+
+        # 1) 规整 Base URL：用户常把文档里的完整地址（含端点路径）直接粘进来
+        parts = normalize_base_url(cfg.base_url)
+        note = ""
+        if parts.base_url and parts.base_url != cfg.base_url:
+            self._set_field("base_url", parts.base_url)
+        if parts.endpoint:
+            self._set_field("submit_url", "{base}" + parts.endpoint)
+            note = parts.localized_note(tr)
+        cfg = self._collect_config()
+
+        # 2) 逐条探测（GET，无害）
+        self._btn_adapt.setEnabled(False)
+        self._test_result.setStyleSheet("")
+        self._test_result.setText(tr("正在探测可用端点…"))
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            report = probe_video_endpoints(
+                cfg.base_url, cfg.api_key, params=dict(cfg.params or {}), allow_post=False
+            )
+        except Exception as exc:  # noqa: BLE001  探测本身不抛异常，这里只是兜底
+            logger.exception("端点探测失败")
+            report = None
+            error = exc
+        finally:
+            QApplication.restoreOverrideCursor()
+            self._btn_adapt.setEnabled(True)
+        if report is None:
+            self._test_result.setStyleSheet("color: #f25a5a;")
+            self._test_result.setText(tr("探测失败: {0}").format(error))
+            return
+
+        # 3) 展示结果，选中行即写回表单（点「保存配置」才落盘）
+        from ui.dialogs.endpoint_adapt_dialog import EndpointAdaptDialog
+
+        dialog = EndpointAdaptDialog(
+            report,
+            parent=self,
+            post_probe_fn=lambda: probe_video_endpoints(
+                cfg.base_url, cfg.api_key, params=dict(cfg.params or {}), allow_post=True
+            ),
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            for key, value in dialog.selection().items():
+                self._set_field(key, value)
+            # 表单即数据源：重新收集一次，确认「保存配置」能拿到这三个值
+            saved = self._collect_config()
+            logger.info(
+                "一键适配端点：submit_url=%s poll_url=%s provider=%s",
+                saved.params.get("submit_url"),
+                saved.params.get("poll_url"),
+                saved.params.get("provider"),
+            )
+            self._test_result.setStyleSheet("color: #22c55e;")
+            self._test_result.setText(
+                tr("已写入端点：{0}（点「保存配置」后生效）").format(saved.params.get("submit_url") or "")
+            )
+        else:
+            self._test_result.setStyleSheet("")
+            self._test_result.setText(note or report.localized_summary(tr))
 
     def _on_import_curl(self) -> None:
         """「从 curl 导入…」：解析 cURL 命令并填入端点/请求头/请求体模板。"""
