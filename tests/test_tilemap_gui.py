@@ -101,6 +101,7 @@ def test_tilemap_worker_thread(qtbot, ctx, tmp_path):
     worker = TilemapWorker(ctx.api, params)
     with qtbot.waitSignal(worker.succeeded, timeout=60000) as blocker:
         worker.start()
+        assert worker.wait(30_000), "worker 线程未在超时内结束（否则 Qt 会在回收时 abort）"
     result = blocker.args[0]
     assert result.atlas_path.exists()
     assert result.map_preview_path.exists()

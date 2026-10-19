@@ -45,15 +45,13 @@ jobs:
           set -o pipefail
           python -m pytest tests -v --basetemp="${{ runner.temp }}/pytest_tmp" 2>&1 | tee pytest.log
 
-      # 失败时把日志尾部写成注解（check-run annotations 无需登录即可通过 API 读取），
-      # 便于在没有仓库 token 的环境里定位崩溃/失败的具体用例
+      # 失败时把日志尾部写成**一条**注解（GitHub 每步只保留前 10 条，且 check-run
+      # annotations 无需登录即可通过 API 读取，便于在没有仓库 token 的环境里定位崩溃点）
       - name: Report failure tail
         if: failure()
         shell: bash
         run: |
           if [ -f pytest.log ]; then
-            echo "=== pytest.log tail (last 60 lines) ==="
-            tail -n 60 pytest.log | sed 's/%/%25/g; s/\r//g' | while IFS= read -r line; do
-              echo "::error title=pytest log::$line"
-            done
+            payload=$(tail -n 80 pytest.log | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=pytest failure tail (last 80 lines)::$payload"
           fi

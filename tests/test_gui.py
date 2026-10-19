@@ -383,6 +383,7 @@ def test_solo_worker_end_to_end(qtbot, ctx, tmp_out):
     worker = SoloWorker(ctx.api, params)
     with qtbot.waitSignal(worker.succeeded, timeout=120_000) as blocker:
         worker.start()
+        assert worker.wait(30_000), "worker 线程未在超时内结束（否则 Qt 会在回收时 abort）"
     result = blocker.args[0]
     assert result.gif_path is not None
     assert result.gif_path.exists()
@@ -398,6 +399,7 @@ def test_solo_worker_missing_config_fails(qtbot, ctx, tmp_out):
     worker = SoloWorker(ctx.api, params)
     with qtbot.waitSignal(worker.failed, timeout=30_000) as blocker:
         worker.start()
+        assert worker.wait(30_000), "worker 线程未在超时内结束（否则 Qt 会在回收时 abort）"
     assert "未配置" in blocker.args[0]
 
 
@@ -418,6 +420,7 @@ def test_solo_worker_intermediate_signals(qtbot, ctx, tmp_out):
     worker.first_frame_ready.connect(received["frames"].append)
     with qtbot.waitSignal(worker.succeeded, timeout=120_000):
         worker.start()
+        assert worker.wait(30_000), "worker 线程未在超时内结束（否则 Qt 会在回收时 abort）"
     assert len(received["prompts"]) == 1
     prompts = received["prompts"][0]
     assert prompts["image_prompt"] and prompts["animation_prompt"] and prompts["negative_prompt"]
@@ -625,6 +628,7 @@ def test_ide_step_worker_runs_and_emits(qtbot):
     worker.log.connect(lambda level, msg: logs.append((level, msg)))
     with qtbot.waitSignal(worker.succeeded, timeout=10_000) as blocker:
         worker.start()
+        assert worker.wait(30_000), "worker 线程未在超时内结束（否则 Qt 会在回收时 abort）"
     assert blocker.args[0] == 42
     assert logs == [("info", "hello")]
 
@@ -640,6 +644,7 @@ def test_ide_step_worker_reports_workflow_error(qtbot):
     worker = IdeStepWorker(fn)
     with qtbot.waitSignal(worker.failed, timeout=10_000) as blocker:
         worker.start()
+        assert worker.wait(30_000), "worker 线程未在超时内结束（否则 Qt 会在回收时 abort）"
     assert "没有可导出的帧" in blocker.args[0]
     assert "导出" in blocker.args[0]
 
@@ -848,6 +853,7 @@ def test_sprite_worker_end_to_end(qtbot, ctx, tmp_out):
     worker = SpriteWorker(ctx.api, params)
     with qtbot.waitSignal(worker.succeeded, timeout=60_000) as blocker:
         worker.start()
+        assert worker.wait(30_000), "worker 线程未在超时内结束（否则 Qt 会在回收时 abort）"
     result = blocker.args[0]
     assert result.frame_count == 4
     assert result.gif_path is not None and result.gif_path.exists()
