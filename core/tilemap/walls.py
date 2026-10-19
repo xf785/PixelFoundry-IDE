@@ -299,7 +299,7 @@ def _keep_largest(mask: np.ndarray) -> np.ndarray:
     seen = np.zeros_like(mask, dtype=bool)
     best: List[Tuple[int, int]] = []
     ys, xs = np.nonzero(mask)
-    for sy, sx in zip(ys.tolist(), xs.tolist()):
+    for sy, sx in zip(ys.tolist(), xs.tolist(), strict=True):
         if seen[sy, sx]:
             continue
         stack = [(sy, sx)]

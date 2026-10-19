@@ -361,10 +361,13 @@ def parse_curl(text: str) -> CurlImport:
             break
         flag, inline_value = _split_option(token)
 
-        def take_value() -> str:  # noqa: ANN202  内部小工具
+        # 注意：inline_value 必须用默认参数在定义时就绑定 —— 直接在闭包里引用
+        # 外层 while 的变量属于「延迟绑定」，一旦将来把这句挪出循环就会读到错误的值
+        #（ruff B023）。
+        def take_value(inline: Optional[str] = inline_value) -> str:  # noqa: ANN202  内部小工具
             nonlocal index
-            if inline_value is not None:
-                return inline_value
+            if inline is not None:
+                return inline
             if index + 1 < len(tokens):
                 index += 1
                 return tokens[index][0]

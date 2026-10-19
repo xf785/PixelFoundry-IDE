@@ -122,7 +122,7 @@ def to_base_set(tiles: List[Image.Image]) -> BaseTileSet:
     if size[0] != size[1]:
         raise ValueError(f"瓦片必须为正方形: {size}")
     names = ["tl", "top", "tr", "left", "center", "right", "bl", "bottom", "br"]
-    named = {n: t.convert("RGBA") for n, t in zip(names, tiles)}
+    named = {n: t.convert("RGBA") for n, t in zip(names, tiles, strict=True)}
     return BaseTileSet(
         size=size[0],
         center=named["center"],
@@ -216,7 +216,7 @@ class EcosystemSheet:
     def terrain_sets(self) -> Dict[int, BaseTileSet]:
         """地形 id → 瓦片组（1=基础，2..=特征，顺序即 features 插入序）。"""
         out = {1: self.base}
-        for i, (name, base) in enumerate(self.features.items(), start=2):
+        for i, base in enumerate(self.features.values(), start=2):
             out[i] = base
         return out
 
@@ -386,7 +386,14 @@ def ecosystem_from_blocks(
     detected = pos == "auto"
     if detected:
         pos, _scores, _ok = detect_base_block(blocks)
-    names = list(feature_names) if feature_names else ["feature_tr", "feature_bl", "feature_br"]
+    # 特征名与特征块的对应规则（刻意如此，不要改成「补齐 3 个」）：
+    #   - 不传 feature_names：按默认 3 个名字收下全部 3 个特征块；
+    #   - 显式传 N 个名字：只收前 N 个特征块（例如只画了「基础 + 草地」两张特征图时，
+    #     其余块通常是重复的基础块，不该凭空多出地形）。
+    if feature_names:
+        names = [str(n).strip() for n in feature_names if str(n).strip()]
+    else:
+        names = ["feature_tr", "feature_bl", "feature_br"]
     br0, bc0 = BLOCK_POSITIONS[pos]
     order = [(br, bc) for br, bc in ((0, 0), (0, 1), (1, 0), (1, 1)) if (br, bc) != (br0, bc0)]
     feats: Dict[str, BaseTileSet] = {}

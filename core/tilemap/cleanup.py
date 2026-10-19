@@ -215,7 +215,7 @@ def _components(mask: np.ndarray, max_components: int = 400) -> List[Dict]:
     seen = np.zeros_like(mask, dtype=bool)
     out: List[Dict] = []
     ys, xs = np.nonzero(mask)
-    for sy, sx in zip(ys.tolist(), xs.tolist()):
+    for sy, sx in zip(ys.tolist(), xs.tolist(), strict=True):
         if seen[sy, sx]:
             continue
         stack = [(sy, sx)]
@@ -353,7 +353,7 @@ def detect_text_marks(
         boxes = [c["box"] for c in small]
         heights = [b[3] - b[1] for b in boxes]
         widths = [b[2] - b[0] for b in boxes]
-        fills = [c["area"] / max(1, (b[2] - b[0]) * (b[3] - b[1])) for c, b in zip(small, boxes)]
+        fills = [c["area"] / max(1, (b[2] - b[0]) * (b[3] - b[1])) for c, b in zip(small, boxes, strict=True)]
         if max(fills) <= 0.45 and max(heights) <= 2.5 * min(heights):
             cy = [(b[1] + b[3]) / 2 for b in boxes]
             cx = [(b[0] + b[2]) / 2 for b in boxes]

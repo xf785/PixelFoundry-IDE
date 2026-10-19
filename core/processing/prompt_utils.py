@@ -86,7 +86,7 @@ def recommended_frames(action: str, fps: int) -> Optional[int]:
 def get_preset(name: str) -> Optional[str]:
     """按名称查预设提示词（可在多个分类中查找）。"""
     name = name.strip()
-    for category, items in load_presets().items():
+    for items in load_presets().values():
         if isinstance(items, dict) and name in items:
             return str(items[name])
     return None

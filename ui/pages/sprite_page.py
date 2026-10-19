@@ -412,6 +412,9 @@ class SpritePage(QWidget):
 
     def _auto_start(self, params: SpriteParams) -> None:
         """自动模式：无干涉跑完全流程。"""
+        if self._worker is not None and self._worker.isRunning():
+            self._log(tr("任务正在运行，请先取消或等待完成"), "warn")
+            return
         self._worker = SpriteWorker(self._ctx.api, params)
         self._worker.log.connect(self._on_log)
         self._worker.base_ready.connect(self._on_base_ready)
@@ -452,6 +455,10 @@ class SpritePage(QWidget):
 
         参数在 GUI 线程收集后缓存（工作线程禁止访问 Qt 控件）。
         """
+        step_worker = getattr(self, "_step_worker", None)
+        if step_worker is not None and step_worker.isRunning():
+            self._log(tr("当前步骤正在执行，请等待完成"), "warn")
+            return
         params = self._collect_params()
         if params is None:
             QMessageBox.warning(self, tr("提示"), self._last_param_error)

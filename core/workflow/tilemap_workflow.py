@@ -429,7 +429,9 @@ class TilemapWorkflow(WorkflowLogMixin):
                 ref_bytes = fu.image_to_bytes(fu.load_image(Path(params.reference_image)), "PNG")
                 self._log_msg("info", tr("已附加参考图（图生图）: {0}").format(params.reference_image))
             except Exception as exc:  # noqa: BLE001
-                raise WorkflowError(tr("参考图读取失败: {0}").format(exc), step="base")
+                raise WorkflowError(
+                    tr("参考图读取失败: {0}").format(exc), step="base"
+                ) from exc
         result = self.image_api.call(
             prompt=session.prompts["image_prompt"],
             size=f"{size}x{size}",

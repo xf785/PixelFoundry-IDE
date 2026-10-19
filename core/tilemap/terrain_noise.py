@@ -164,7 +164,9 @@ class ProceduralTerrain:
         total = np.zeros(xs.shape, dtype=np.float64)
         amp, freq, norm = 1.0, 1.0, 0.0
         for _ in range(octaves):
-            vec = np.vectorize(lambda a, b: noise(a * freq, b * freq))
+            # freq 用默认参数绑定：np.vectorize 里的 lambda 若直接引用外层变量，
+            # 属于延迟绑定（ruff B023），改成逐倍频绑定的写法更安全
+            vec = np.vectorize(lambda a, b, f=freq: noise(a * f, b * f))
             total += amp * vec(xs, ys)
             norm += amp
             amp *= persistence

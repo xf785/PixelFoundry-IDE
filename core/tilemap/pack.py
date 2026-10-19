@@ -619,7 +619,9 @@ def _load_from_reader(manifest: dict, read, default_name: str) -> TilePack:
         rel = item.get("file")
         try:
             sheets[str(item.get("name"))] = Image.open(io.BytesIO(read(rel))).convert("RGBA")
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            # 单张底图坏了不该让整个包导入失败，但至少留下可排查的线索
+            logger.debug("跳过损坏的底图 %s: %s", rel, exc)
             continue
     sub = manifest.get("prop_kind", "pieces")
     pieces: Dict[str, Image.Image] = {}
@@ -628,7 +630,8 @@ def _load_from_reader(manifest: dict, read, default_name: str) -> TilePack:
             try:
                 pieces[name] = Image.open(io.BytesIO(read(rel))).convert("RGBA")
                 break
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("跳过不可读的拼件 %s: %s", rel, exc)
                 continue
     return TilePack(
         name=str(manifest.get("name", default_name)), category=str(manifest.get("category", "ground")),

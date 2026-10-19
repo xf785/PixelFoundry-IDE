@@ -329,7 +329,7 @@ class TileMapModel:
                         continue
                     ks = np.array([self._blend_k(x, y, b, axis, depth) for b in starts], dtype=int)
                     for k in range(1, depth + 1):
-                        sel = np.array([b for b, kv in zip(starts, ks) if kv >= k], dtype=int)
+                        sel = np.array([b for b, kv in zip(starts, ks, strict=True) if kv >= k], dtype=int)
                         if sel.size == 0:
                             continue
                         offs = sel[:, None] + np.arange(block)[None, :]

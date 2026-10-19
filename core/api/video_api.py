@@ -502,7 +502,7 @@ class VideoAPI(BaseAPI):
         if isinstance(raw, dict):
             raw = raw.get("frames") or raw.get("images") or raw.get("items")
         if isinstance(raw, list):
-            for item in raw:
+            for index, item in enumerate(raw):
                 if isinstance(item, dict):
                     b64 = item.get("b64_json") or item.get("base64")
                     if b64:
@@ -510,7 +510,8 @@ class VideoAPI(BaseAPI):
                             if isinstance(b64, str) and b64.startswith("data:"):
                                 b64 = b64.split(",", 1)[1]
                             frames.append(base64.b64decode(b64))
-                        except Exception:  # noqa: BLE001
+                        except Exception as exc:  # noqa: BLE001
+                            logger.debug("跳过无法解码的帧 #%d: %s", index, exc)
                             continue
         return frames
 

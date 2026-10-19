@@ -267,7 +267,7 @@ def measure_terrain_art(
     """
     tiles = base.all()
     order = ["tl", "top", "tr", "left", "center", "right", "bl", "bottom", "br"]
-    by_name = dict(zip(order, tiles))
+    by_name = dict(zip(order, tiles, strict=True))
     centre = np.asarray(by_name["center"].convert("RGB"), dtype=np.float32)
     s = centre.shape[0]
     feat_rgb = np.median(centre.reshape(-1, 3), axis=0)

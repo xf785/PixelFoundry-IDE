@@ -7,7 +7,7 @@ from core.tilemap import BIT, TileMapModel, compose_art_tile
 from core.tilemap.bigmap import generate_perlin_map, scatter_walls
 from core.tilemap.pack import TilePack, load_tilepack, pack_from_session, save_tilepack
 from core.tilemap.seamless import align_terrain_set, median_tile_texture
-from core.tilemap.tiles import BaseTileSet, crop_blocks, ecosystem_from_blocks
+from core.tilemap.tiles import BaseTileSet, BuildingSheet, crop_blocks, ecosystem_from_blocks
 from core.tilemap.walls import build_piece_set, wall_art_from_sheet
 
 S = 32
@@ -167,7 +167,7 @@ def test_perlin_big_map_renders_with_tile_cache():
 
 def test_scatter_walls_places_piece_family():
     art = wall_art_from_sheet(
-        type("S", (), {})() if False else __import__("core.tilemap.tiles", fromlist=["BuildingSheet"]).BuildingSheet(
+        BuildingSheet(
             wall=BaseTileSet(size=S, center=_cell((150, 140, 128), S), edges={}, corners={}),
             top=BaseTileSet(size=S, center=_cell((186, 176, 160), S), edges={}, corners={}),
             opening=BaseTileSet(size=S, center=Image.new("RGBA", (S, S), (255, 255, 255, 255)), edges={}, corners={}),

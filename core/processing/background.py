@@ -115,7 +115,7 @@ def _label_region_sizes(cand: np.ndarray) -> Tuple[np.ndarray, List[int]]:
     sizes: List[int] = []
     lab = 0
     ys, xs = np.nonzero(cand)
-    for y, x in zip(ys.tolist(), xs.tolist()):
+    for y, x in zip(ys.tolist(), xs.tolist(), strict=True):
         if labels[y, x] != -1:
             continue
         stack = [(y, x)]

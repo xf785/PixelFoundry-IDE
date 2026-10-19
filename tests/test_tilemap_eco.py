@@ -219,6 +219,18 @@ def test_plain_sheet_detection_is_safe():
     assert np.asarray(eco.base.center.convert("RGB")).reshape(-1, 3).mean(0).round(0).tolist() == list(BASE_C)
 
 
+def test_ecosystem_feature_names_select_feature_blocks():
+    """特征名与特征块的对应规则（刻意行为，见 ecosystem_from_blocks 注释）。
+
+    显式给 N 个名字就只收前 N 个特征块；不传名字才收全部 3 个。
+    """
+    img = Image.new("RGBA", (96, 96), BASE_C + (255,))
+    one = ecosystem_from_blocks(crop_blocks(img)[0], tile_size=32, feature_names=["only_one"])
+    assert set(one.features) == {"only_one"}, one.features
+    three = ecosystem_from_blocks(crop_blocks(img)[0], tile_size=32)
+    assert set(three.features) == {"feature_tr", "feature_bl", "feature_br"}, three.features
+
+
 def test_grid_cell_px_is_multiple_and_within_limit():
     from core.tilemap.tiles import grid_cell_px
 

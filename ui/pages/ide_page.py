@@ -949,6 +949,11 @@ class IdePage(QWidget):
             self._step_bar.clear_done()
 
     def _on_run_step(self) -> None:
+        # 防重入：顶部与底部两个按钮、工具条动作都连到这里，运行中再触发一次
+        # 会覆盖 self._worker（旧 QThread 未结束就被回收 → Qt 崩溃）
+        if self._worker is not None and self._worker.isRunning():
+            self._log(tr("当前步骤正在执行，请等待完成"), "warn")
+            return
         self._sync_session()
         step = self._current_step
         if step == 0:

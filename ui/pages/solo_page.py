@@ -447,6 +447,11 @@ class SoloPage(QWidget):
         self._log(tr("已导入像素板块图片作为参考图/首帧，可点击「开始生成」走图生视频"), "info")
 
     def _on_start(self) -> None:
+        # 防重入：按钮会被禁用，但菜单/快捷键动作仍可能再触发一次；
+        # 真起了第二个 QThread 会覆盖 self._worker，旧线程被回收时可能直接崩溃
+        if self._worker is not None and self._worker.isRunning():
+            self._log(tr("任务正在运行，请先取消或等待完成"), "warn")
+            return
         desc = self._desc_edit.toPlainText().strip()
         if not desc:
             QMessageBox.warning(self, tr("提示"), tr("请先输入文本描述"))

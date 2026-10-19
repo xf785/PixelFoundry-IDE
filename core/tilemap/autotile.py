@@ -146,7 +146,7 @@ def compose_tile(
         alpha[disc] = False
         line_px.update(
             (int(x), int(y))
-            for y, x in zip(*np.nonzero(ring))
+            for y, x in zip(*np.nonzero(ring), strict=True)
             if alpha[y, x]
         )
 
